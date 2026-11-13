@@ -1,13 +1,16 @@
 import asyncio
 from logging.config import fileConfig
+from typing import Literal
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import app.models  # noqa: F401 — регистрирует модели в Base.metadata для autogenerate
 from app.core.config import settings
 from app.db.base import Base
+from app.db.types import UtcDateTime
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -21,6 +24,14 @@ if config.config_file_name is not None:
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 target_metadata = Base.metadata
+
+
+def render_item(type_: str, obj: object, autogen_context: object) -> str | Literal[False]:
+    # Миграции не должны зависеть от кода приложения: UtcDateTime в БД — обычный DATETIME.
+    if type_ == "type" and isinstance(obj, UtcDateTime):
+        return "sa.DateTime()"
+    return False
+
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -47,6 +58,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         render_as_batch=True,
+        render_item=render_item,
     )
 
     with context.begin_transaction():
@@ -59,6 +71,7 @@ def do_run_migrations(connection: Connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         render_as_batch=True,
+        render_item=render_item,
     )
 
     with context.begin_transaction():
