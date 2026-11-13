@@ -1,0 +1,40 @@
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - sqlite_data:/data
+    expose:
+      - "8000"
+    healthcheck:
+      # В slim-образе нет curl; urlopen бросает исключение и на 503.
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    mem_limit: 256m
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      API_URL: http://backend:8000
+      # adapter-node проверяет ORIGIN для защиты форм от CSRF.
+      ORIGIN: http://localhost:3000
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    mem_limit: 256m
+
+volumes:
+  sqlite_data:
