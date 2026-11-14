@@ -5,11 +5,12 @@ import logging
 from datetime import datetime, timedelta
 from html import escape
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from app.db.types import utcnow
-from app.models import TELEGRAM_CONNECTION_ID, Monitor, NotificationChannel, TelegramConnection
+from app.models import Monitor, NotificationChannel, TelegramConnection
 from app.monitoring.scheduler import Alert
 from app.monitoring.state import AlertKind
 from app.notifications.telegram import TelegramClient, TelegramError
@@ -66,12 +67,15 @@ async def send_alert(
     session_factory: async_sessionmaker[AsyncSession], telegram: TelegramClient, alert: Alert
 ) -> None:
     async with session_factory() as session:
-        connection = await session.get(TelegramConnection, TELEGRAM_CONNECTION_ID)
         monitor = await session.get(
             Monitor, alert.monitor.id, options=[selectinload(Monitor.channels)]
         )
         if monitor is None or not monitor.channels:
             return
+        # Оповещения идут через бота владельца монитора (ADR 0001).
+        connection = await session.scalar(
+            select(TelegramConnection).where(TelegramConnection.user_id == monitor.user_id)
+        )
         if connection is None:
             logger.warning("Оповещение о мониторе %s не отправлено: нет Telegram", monitor.id)
             return

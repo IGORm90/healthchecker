@@ -1,23 +1,61 @@
 import json
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 import app.models  # noqa: F401 — регистрирует модели в Base.metadata
 from app.api.telegram import get_telegram
+from app.auth.sessions import create_session
 from app.db.base import Base
 from app.db.session import create_engine, get_session
 from app.main import app
+from app.models import User
 from app.monitoring import ssrf
 from app.notifications.telegram import TelegramClient
 
 # Публичный адрес, в который по умолчанию «резолвится» любое имя в тестах.
 PUBLIC_IP = "93.184.215.14"
+
+# Telegram ID Пользователя, от имени которого работает фикстура client.
+USER_TELEGRAM_ID = 1001
+
+SessionFactory = async_sessionmaker[AsyncSession]
+
+
+async def add_user(session_factory: SessionFactory, telegram_id: int, **fields: object) -> User:
+    async with session_factory() as session:
+        user = User(
+            telegram_sub=f"sub-{telegram_id}",
+            telegram_id=telegram_id,
+            name=f"User {telegram_id}",
+            **fields,
+        )
+        session.add(user)
+        await session.commit()
+        return user
+
+
+async def login(session_factory: SessionFactory, user: User, *, is_superadmin: bool = False) -> str:
+    """Токен новой Сессии Пользователя."""
+    async with session_factory() as session:
+        new_session = create_session(session, user, is_superadmin=is_superadmin)
+        await session.commit()
+        return new_session.token
+
+
+async def default_user_id(session_factory: SessionFactory) -> int:
+    """id Пользователя фикстуры user: для записей, которые тесты создают в базе напрямую."""
+    async with session_factory() as session:
+        user_id = await session.scalar(select(User.id).where(User.telegram_id == USER_TELEGRAM_ID))
+    assert user_id is not None, "нужна фикстура user"
+    return user_id
 
 
 async def client_for_engine(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
@@ -50,9 +88,47 @@ def session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 
 
 @pytest.fixture
-async def client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
+async def anonymous_client(engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
     async for c in client_for_engine(engine):
         yield c
+
+
+@pytest.fixture
+async def user(session_factory: SessionFactory) -> User:
+    return await add_user(session_factory, USER_TELEGRAM_ID)
+
+
+@pytest.fixture
+async def client(
+    anonymous_client: AsyncClient, session_factory: SessionFactory, user: User
+) -> AsyncClient:
+    """Клиент API от имени Пользователя фикстуры user."""
+    token = await login(session_factory, user)
+    anonymous_client.headers["Authorization"] = f"Bearer {token}"
+    return anonymous_client
+
+
+ClientFor = Callable[..., Awaitable[AsyncClient]]
+
+
+@pytest.fixture
+async def client_for(
+    anonymous_client: AsyncClient, session_factory: SessionFactory
+) -> AsyncIterator[ClientFor]:
+    """Клиент API от имени другого Пользователя: client_for(user, is_superadmin=False)."""
+    async with AsyncExitStack() as stack:
+
+        async def make(user: User, *, is_superadmin: bool = False) -> AsyncClient:
+            token = await login(session_factory, user, is_superadmin=is_superadmin)
+            return await stack.enter_async_context(
+                AsyncClient(
+                    transport=ASGITransport(app=app),
+                    base_url="http://test",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            )
+
+        yield make
 
 
 @pytest.fixture

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import validation_error
 from app.api.telegram import get_telegram, require_connection
+from app.auth.deps import Auth
 from app.db.session import get_session
 from app.models import NotificationChannel, monitor_notification_channels
 from app.notifications.alerts import deliver
@@ -54,9 +55,10 @@ async def _channel_out(
     return _to_out(channel, monitors_count or 0)
 
 
-async def _get_channel(session: AsyncSession, channel_id: int) -> NotificationChannel:
+async def _get_channel(session: AsyncSession, channel_id: int, user_id: int) -> NotificationChannel:
     channel = await session.get(NotificationChannel, channel_id)
-    if channel is None:
+    # Чужой Канал оповещения неотличим от несуществующего.
+    if channel is None or channel.user_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Канал оповещения не найден"
         )
@@ -64,29 +66,32 @@ async def _get_channel(session: AsyncSession, channel_id: int) -> NotificationCh
 
 
 @router.get("")
-async def list_channels(session: Session) -> list[NotificationChannelOut]:
+async def list_channels(current: Auth, session: Session) -> list[NotificationChannelOut]:
     rows = await session.execute(
-        select(NotificationChannel, _monitors_count).order_by(
-            NotificationChannel.name, NotificationChannel.id
-        )
+        select(NotificationChannel, _monitors_count)
+        .where(NotificationChannel.user_id == current.id)
+        .order_by(NotificationChannel.name, NotificationChannel.id)
     )
     return [_to_out(channel, count) for channel, count in rows]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_channel(
-    data: NotificationChannelIn, session: Session, telegram: Telegram
+    data: NotificationChannelIn, current: Auth, session: Session, telegram: Telegram
 ) -> NotificationChannelOut:
-    connection = await require_connection(session)
+    connection = await require_connection(session, current.id)
     duplicate = await session.scalar(
         select(NotificationChannel.id).where(
-            NotificationChannel.telegram_chat_id == data.telegram_chat_id
+            NotificationChannel.user_id == current.id,
+            NotificationChannel.telegram_chat_id == data.telegram_chat_id,
         )
     )
     if duplicate is not None:
         raise validation_error("telegram_chat_id", "Этот чат уже подключён", "duplicate_channel")
 
-    channel = NotificationChannel(name=data.name, telegram_chat_id=data.telegram_chat_id)
+    channel = NotificationChannel(
+        user_id=current.id, name=data.name, telegram_chat_id=data.telegram_chat_id
+    )
     session.add(channel)
     # Ошибка тестового сообщения не мешает созданию: она видна в списке Каналов оповещения.
     await deliver(
@@ -101,27 +106,27 @@ async def create_channel(
 
 @router.patch("/{channel_id}")
 async def rename_channel(
-    channel_id: int, data: NotificationChannelRename, session: Session
+    channel_id: int, data: NotificationChannelRename, current: Auth, session: Session
 ) -> NotificationChannelOut:
-    channel = await _get_channel(session, channel_id)
+    channel = await _get_channel(session, channel_id, current.id)
     channel.name = data.name
     await session.commit()
     return await _channel_out(session, channel)
 
 
 @router.delete("/{channel_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_channel(channel_id: int, session: Session) -> None:
-    channel = await _get_channel(session, channel_id)
+async def delete_channel(channel_id: int, current: Auth, session: Session) -> None:
+    channel = await _get_channel(session, channel_id, current.id)
     await session.delete(channel)
     await session.commit()
 
 
 @router.post("/{channel_id}/test")
 async def test_channel(
-    channel_id: int, session: Session, telegram: Telegram
+    channel_id: int, current: Auth, session: Session, telegram: Telegram
 ) -> NotificationChannelOut:
-    connection = await require_connection(session)
-    channel = await _get_channel(session, channel_id)
+    connection = await require_connection(session, current.id)
+    channel = await _get_channel(session, channel_id, current.id)
     await deliver(telegram, connection.bot_token, channel, "🔔 Тестовое сообщение Healthchecker")
     await session.commit()
     return await _channel_out(session, channel)

@@ -14,7 +14,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.types import utcnow
-from app.models import Check, Monitor, MonitorState
+from app.models import Check, Monitor, MonitorState, User
 from app.monitoring.runner import CheckResult, run_check
 from app.monitoring.state import AlertKind, transition
 
@@ -97,7 +97,14 @@ class Scheduler:
         return list(
             await session.scalars(
                 select(Monitor)
-                .where(Monitor.next_check_at <= utcnow(), Monitor.id.not_in(self._in_flight))
+                # Мониторы заблокированных Пользователей не проверяются; их next_check_at
+                # остаётся в прошлом, и после разблокировки они проверяются в ближайший тик.
+                .join(User, User.id == Monitor.user_id)
+                .where(
+                    Monitor.next_check_at <= utcnow(),
+                    Monitor.id.not_in(self._in_flight),
+                    User.blocked_at.is_(None),
+                )
                 .order_by(Monitor.id)
             )
         )

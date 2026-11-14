@@ -7,6 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models import Check, Monitor, MonitorState, NotificationChannel
+from tests.conftest import default_user_id
 
 SessionFactory = async_sessionmaker[AsyncSession]
 
@@ -23,7 +24,11 @@ async def create_monitor(client: AsyncClient, **overrides: Any) -> dict[str, Any
 
 async def add_channel(session_factory: SessionFactory, chat_id: int) -> int:
     async with session_factory() as session:
-        channel = NotificationChannel(name=f"chat {chat_id}", telegram_chat_id=chat_id)
+        channel = NotificationChannel(
+            user_id=await default_user_id(session_factory),
+            name=f"chat {chat_id}",
+            telegram_chat_id=chat_id,
+        )
         session.add(channel)
         await session.commit()
         return channel.id

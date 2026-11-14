@@ -56,6 +56,7 @@ class Monitor(Base):
     __tablename__ = "monitors"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(200))
     url: Mapped[str] = mapped_column(String(2048))
     method: Mapped[HttpMethod] = mapped_column(str_enum(HttpMethod), default=HttpMethod.GET)

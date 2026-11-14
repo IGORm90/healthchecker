@@ -7,10 +7,11 @@ from app.models.monitor import (
     monitor_notification_channels,
 )
 from app.models.notification_channel import NotificationChannel, NotificationChannelKind
-from app.models.telegram_connection import TELEGRAM_CONNECTION_ID, TelegramConnection
+from app.models.session import UserSession
+from app.models.telegram_connection import TelegramConnection
+from app.models.user import User
 
 __all__ = [
-    "TELEGRAM_CONNECTION_ID",
     "Check",
     "CheckInterval",
     "HttpMethod",
@@ -19,5 +20,7 @@ __all__ = [
     "NotificationChannel",
     "NotificationChannelKind",
     "TelegramConnection",
+    "User",
+    "UserSession",
     "monitor_notification_channels",
 ]

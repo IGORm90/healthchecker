@@ -1,17 +1,13 @@
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import Delete, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import validation_error
+from app.auth.deps import Auth
 from app.db.session import get_session
-from app.models import (
-    TELEGRAM_CONNECTION_ID,
-    NotificationChannel,
-    NotificationChannelKind,
-    TelegramConnection,
-)
+from app.models import NotificationChannel, NotificationChannelKind, TelegramConnection
 from app.notifications.telegram import TelegramClient, TelegramError
 from app.schemas.notifications import (
     DiscoveredChat,
@@ -34,8 +30,20 @@ LEFT_STATUSES = {"left", "kicked"}
 IS_TELEGRAM_CHANNEL = NotificationChannel.kind == NotificationChannelKind.TELEGRAM
 
 
-async def require_connection(session: AsyncSession) -> TelegramConnection:
-    connection = await session.get(TelegramConnection, TELEGRAM_CONNECTION_ID)
+def _delete_telegram_channels(user_id: int) -> Delete:
+    return delete(NotificationChannel).where(
+        NotificationChannel.user_id == user_id, IS_TELEGRAM_CHANNEL
+    )
+
+
+async def get_connection_of(session: AsyncSession, user_id: int) -> TelegramConnection | None:
+    return await session.scalar(
+        select(TelegramConnection).where(TelegramConnection.user_id == user_id)
+    )
+
+
+async def require_connection(session: AsyncSession, user_id: int) -> TelegramConnection:
+    connection = await get_connection_of(session, user_id)
     if connection is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -52,8 +60,8 @@ def _chat_title(chat: dict[str, Any]) -> str:
 
 
 @router.get("")
-async def get_connection(session: Session) -> TelegramConnectionOut:
-    connection = await session.get(TelegramConnection, TELEGRAM_CONNECTION_ID)
+async def get_connection(current: Auth, session: Session) -> TelegramConnectionOut:
+    connection = await get_connection_of(session, current.id)
     return TelegramConnectionOut(
         connected=connection is not None,
         bot_username=connection.bot_username if connection else None,
@@ -62,18 +70,29 @@ async def get_connection(session: Session) -> TelegramConnectionOut:
 
 @router.put("")
 async def connect(
-    data: TelegramConnectionIn, session: Session, telegram: Telegram
+    data: TelegramConnectionIn, current: Auth, session: Session, telegram: Telegram
 ) -> TelegramConnectionOut:
     try:
         bot = await telegram.get_me(data.token)
     except TelegramError as exc:
         raise validation_error("token", f"Telegram отклонил токен: {exc}", "invalid_token") from exc
 
-    connection = await session.get(TelegramConnection, TELEGRAM_CONNECTION_ID)
+    taken = await session.scalar(
+        select(TelegramConnection.id).where(
+            TelegramConnection.bot_id == bot.id, TelegramConnection.user_id != current.id
+        )
+    )
+    if taken is not None:
+        # Один бот у двух Пользователей перехватывал бы их getUpdates (ADR 0001).
+        raise validation_error("token", "Этот бот уже подключён другим пользователем", "bot_taken")
+
+    connection = await get_connection_of(session, current.id)
     if connection is not None and connection.bot_id != bot.id:
         # Каналы оповещения — чаты прежнего бота: новый бот в них писать не может.
         channels_count = await session.scalar(
-            select(func.count()).select_from(NotificationChannel).where(IS_TELEGRAM_CHANNEL)
+            select(func.count())
+            .select_from(NotificationChannel)
+            .where(NotificationChannel.user_id == current.id, IS_TELEGRAM_CHANNEL)
         )
         if channels_count and not data.confirm_replace:
             raise HTTPException(
@@ -84,12 +103,12 @@ async def connect(
                     "channels_count": channels_count,
                 },
             )
-        await session.execute(delete(NotificationChannel).where(IS_TELEGRAM_CHANNEL))
+        await session.execute(_delete_telegram_channels(current.id))
         # Непрочитанные обновления относятся к прежнему боту.
         connection.updates_offset = 0
 
     if connection is None:
-        connection = TelegramConnection(id=TELEGRAM_CONNECTION_ID, updates_offset=0)
+        connection = TelegramConnection(user_id=current.id, updates_offset=0)
         session.add(connection)
     connection.bot_token = data.token
     connection.bot_id = bot.id
@@ -99,20 +118,24 @@ async def connect(
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
-async def disconnect(session: Session) -> None:
-    await session.execute(delete(NotificationChannel).where(IS_TELEGRAM_CHANNEL))
-    await session.execute(delete(TelegramConnection))
+async def disconnect(current: Auth, session: Session) -> None:
+    await session.execute(_delete_telegram_channels(current.id))
+    await session.execute(
+        delete(TelegramConnection).where(TelegramConnection.user_id == current.id)
+    )
     await session.commit()
 
 
 @router.post("/discover")
-async def discover_chats(session: Session, telegram: Telegram) -> list[DiscoveredChat]:
+async def discover_chats(
+    current: Auth, session: Session, telegram: Telegram
+) -> list[DiscoveredChat]:
     """Чаты, куда добавили бота, из обновлений после прошлого вызова.
 
     Обновления после чтения подтверждаются (offset), поэтому найденный чат
     надо подключить сразу: повторный вызов его уже не вернёт.
     """
-    connection = await require_connection(session)
+    connection = await require_connection(session, current.id)
     try:
         updates = await telegram.get_updates(connection.bot_token, connection.updates_offset)
     except TelegramError as exc:
@@ -140,7 +163,8 @@ async def discover_chats(session: Session, telegram: Telegram) -> list[Discovere
     connected = set(
         await session.scalars(
             select(NotificationChannel.telegram_chat_id).where(
-                NotificationChannel.telegram_chat_id.in_(chats)
+                NotificationChannel.user_id == current.id,
+                NotificationChannel.telegram_chat_id.in_(chats),
             )
         )
     )

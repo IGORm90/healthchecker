@@ -61,6 +61,8 @@ class MonitorIn(BaseModel):
 
 class MonitorOut(BaseModel):
     id: int
+    # Владелец: Суперадмин видит и чужие мониторы.
+    user_id: int
     name: str
     url: str
     method: HttpMethod

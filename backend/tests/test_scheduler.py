@@ -6,8 +6,9 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.types import utcnow
-from app.models import Monitor, MonitorState
+from app.models import Monitor, MonitorState, User
 from app.monitoring.scheduler import Alert, Scheduler
+from tests.conftest import default_user_id
 
 SessionFactory = async_sessionmaker[AsyncSession]
 
@@ -17,13 +18,14 @@ async def ignore(_alert: Alert) -> None:
 
 
 @pytest.fixture
-async def scheduler(session_factory: SessionFactory) -> AsyncIterator[Scheduler]:
+async def scheduler(session_factory: SessionFactory, user: User) -> AsyncIterator[Scheduler]:
     async with httpx.AsyncClient() as http:
         yield Scheduler(session_factory, http, ignore)
 
 
 async def add_monitor(session_factory: SessionFactory, **overrides: object) -> int:
     fields: dict[str, object] = {
+        "user_id": await default_user_id(session_factory),
         "name": "Example",
         "url": "https://example.com",
         "interval_seconds": 60,
