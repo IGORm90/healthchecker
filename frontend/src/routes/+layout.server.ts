@@ -1,10 +1,8 @@
 import { API_URL } from '$app/env/private';
-import type { PageServerLoad } from './$types';
+import type { Liveness } from '#lib/liveness.ts';
+import type { LayoutServerLoad } from './$types';
 
-// Liveness backend: ok — API и БД живы, error — API жив, БД нет, unavailable — API не ответил.
-type Liveness = 'ok' | 'error' | 'unavailable';
-
-export const load: PageServerLoad = async ({ fetch }) => {
+export const load: LayoutServerLoad = async ({ fetch }) => {
 	if (!API_URL) {
 		console.error('API_URL is not set');
 		return { liveness: 'unavailable' as Liveness };

@@ -1,0 +1,10 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/forms';
+
+/* Цвета Состояний монитора: bg-state-up, text-state-down и т. д. */
+@theme {
+	--color-state-unknown: var(--color-zinc-400);
+	--color-state-up: var(--color-emerald-500);
+	--color-state-down: var(--color-red-500);
+	--color-state-paused: var(--color-amber-500);
+}

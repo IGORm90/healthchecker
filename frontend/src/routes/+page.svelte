@@ -1,8 +1,14 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
-
-	let { data }: PageProps = $props();
+	import EmptyState from '#lib/components/EmptyState.svelte';
 </script>
 
-<h1>Healthchecker</h1>
-<p>Backend: {data.liveness}</p>
+<svelte:head>
+	<title>Мониторы · Healthchecker</title>
+</svelte:head>
+
+<h1 class="mb-6 text-2xl font-semibold tracking-tight">Мониторы</h1>
+
+<EmptyState
+	title="Мониторов пока нет"
+	description="Создание мониторов появится в следующем этапе."
+/>
