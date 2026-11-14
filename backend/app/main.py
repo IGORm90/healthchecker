@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import health
+from app.api import health, monitors
 from app.db.session import engine
 
 
@@ -16,3 +16,4 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Healthchecker", lifespan=lifespan)
 app.include_router(health.router)
+app.include_router(monitors.router)
