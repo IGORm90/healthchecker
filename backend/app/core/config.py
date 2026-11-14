@@ -2,7 +2,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # env_ignore_empty: пустая строка из .env.example означает «не задано».
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
 
     database_url: str = "sqlite+aiosqlite:////data/app.db"
     # Разрешить мониторам ходить в приватные сети (10/8, 172.16/12, 192.168/16, fc00::/7).

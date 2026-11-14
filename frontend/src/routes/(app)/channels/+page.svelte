@@ -92,7 +92,7 @@
 				<input type="hidden" name="token" value={replace.token} />
 				<input type="hidden" name="confirm_replace" value="true" />
 				<button class="btn-danger" disabled={busy}>Сменить бота и удалить каналы</button>
-				<a class="btn-secondary" href={resolve('/channels')}>Отмена</a>
+				<a class="btn-secondary" href={resolve('/(app)/channels')}>Отмена</a>
 			</form>
 		</div>
 	{:else}

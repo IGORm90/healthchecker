@@ -16,7 +16,7 @@
 		<p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{page.error.message}</p>
 	{/if}
 	<a
-		href={resolve('/')}
+		href={resolve('/(app)')}
 		class="mt-6 inline-block text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
 	>
 		К мониторам

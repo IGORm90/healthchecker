@@ -2,10 +2,11 @@ import { API_URL } from '$app/env/private';
 import type { Liveness } from '#lib/liveness.ts';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ fetch }) => {
+export const load: LayoutServerLoad = async ({ fetch, locals }) => {
+	const user = locals.user;
 	if (!API_URL) {
 		console.error('API_URL is not set');
-		return { liveness: 'unavailable' as Liveness };
+		return { liveness: 'unavailable' as Liveness, user };
 	}
 
 	let liveness: Liveness;
@@ -16,5 +17,5 @@ export const load: LayoutServerLoad = async ({ fetch }) => {
 	} catch {
 		liveness = 'unavailable';
 	}
-	return { liveness };
+	return { liveness, user };
 };

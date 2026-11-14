@@ -23,7 +23,7 @@
 		</p>
 	</div>
 	<div class="flex flex-wrap gap-2">
-		<a class="btn-secondary" href={resolve('/monitors/[id]/edit', { id: String(monitor.id) })}
+		<a class="btn-secondary" href={resolve('/(app)/monitors/[id]/edit', { id: String(monitor.id) })}
 			>Изменить</a
 		>
 		<PauseButton {monitor} />
@@ -113,7 +113,7 @@
 		<p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">Проверки хранятся 3 дня.</p>
 	</section>
 
-	<a class="text-sm text-indigo-600 hover:underline dark:text-indigo-400" href={resolve('/')}
+	<a class="text-sm text-indigo-600 hover:underline dark:text-indigo-400" href={resolve('/(app)')}
 		>← Все мониторы</a
 	>
 </div>

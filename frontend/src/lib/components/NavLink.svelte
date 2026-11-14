@@ -11,8 +11,8 @@
 	// Сравниваются id маршрутов, а не пути: resolve() при SSR отдаёт относительную ссылку.
 	// Корень активен только сам по себе, остальные пункты — и на вложенных страницах.
 	let active = $derived(
-		route === '/'
-			? page.route.id === '/'
+		route === '/(app)'
+			? page.route.id === '/(app)'
 			: page.route.id === route || !!page.route.id?.startsWith(`${route}/`)
 	);
 </script>

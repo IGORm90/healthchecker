@@ -16,13 +16,13 @@
 <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
 	<h1 class="text-2xl font-semibold tracking-tight">Мониторы</h1>
 	{#if data.monitors.length > 0}
-		<a href={resolve('/monitors/new')} class="btn-primary">Создать монитор</a>
+		<a href={resolve('/(app)/monitors/new')} class="btn-primary">Создать монитор</a>
 	{/if}
 </div>
 
 {#if data.monitors.length === 0}
 	<EmptyState title="Мониторов пока нет" description="Монитор проверяет HTTP-адрес по расписанию.">
-		<a href={resolve('/monitors/new')} class="btn-primary">Создать монитор</a>
+		<a href={resolve('/(app)/monitors/new')} class="btn-primary">Создать монитор</a>
 	</EmptyState>
 {:else}
 	<div class="overflow-x-auto card">
@@ -42,7 +42,7 @@
 						<td class="px-4 py-3 font-medium">
 							<a
 								class="text-indigo-600 hover:underline dark:text-indigo-400"
-								href={resolve('/monitors/[id]', { id: String(monitor.id) })}>{monitor.name}</a
+								href={resolve('/(app)/monitors/[id]', { id: String(monitor.id) })}>{monitor.name}</a
 							>
 						</td>
 						<td

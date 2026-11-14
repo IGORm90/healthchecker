@@ -1,5 +1,5 @@
 import { API_URL } from '$app/env/private';
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 
 const TIMEOUT_MS = 10_000;
 
@@ -75,6 +75,8 @@ export async function api<T>(fetch: Fetch, path: string, init: RequestInit = {})
 	}
 
 	if (res.status === 204) return undefined as T;
+	// Сессия истекла или сброшена между проверкой в hooks и этим запросом.
+	if (res.status === 401) redirect(303, '/login');
 	const body = await res.json().catch(() => null);
 	if (res.ok) return body as T;
 	// 422 и 409 — ошибки ввода; ответ с code — ожидаемый сбой (например, Telegram), не баг.

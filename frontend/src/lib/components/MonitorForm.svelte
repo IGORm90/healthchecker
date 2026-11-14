@@ -184,7 +184,7 @@
 					Каналов оповещения пока нет —
 					<a
 						class="text-indigo-600 hover:underline dark:text-indigo-400"
-						href={resolve('/channels')}>подключите Telegram</a
+						href={resolve('/(app)/channels')}>подключите Telegram</a
 					>.
 				</p>
 			{:else}
@@ -212,8 +212,8 @@
 		<a
 			class="btn-secondary"
 			href={monitorId === undefined
-				? resolve('/')
-				: resolve('/monitors/[id]', { id: String(monitorId) })}>Отмена</a
+				? resolve('/(app)')
+				: resolve('/(app)/monitors/[id]', { id: String(monitorId) })}>Отмена</a
 		>
 	</div>
 </form>

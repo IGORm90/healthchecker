@@ -16,11 +16,21 @@
 <div class="flex min-h-dvh flex-col">
 	<header class="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
 		<div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-			<a href={resolve('/')} class="font-semibold tracking-tight">Healthchecker</a>
-			<nav class="flex gap-1">
-				<NavLink route="/">Мониторы</NavLink>
-				<NavLink route="/channels">Каналы оповещения</NavLink>
-			</nav>
+			<a href={resolve('/(app)')} class="font-semibold tracking-tight">Healthchecker</a>
+			{#if data.user}
+				<nav class="flex gap-1">
+					<NavLink route="/(app)">Мониторы</NavLink>
+					<NavLink route="/(app)/channels">Каналы оповещения</NavLink>
+				</nav>
+				<div class="ml-auto flex items-center gap-3 text-sm">
+					<span class="text-zinc-600 dark:text-zinc-400" title={data.user.username ?? undefined}
+						>{data.user.name}</span
+					>
+					<form method="POST" action={resolve('/auth/logout')}>
+						<button class="btn-secondary">Выйти</button>
+					</form>
+				</div>
+			{/if}
 		</div>
 	</header>
 
