@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance, type SubmitFunction } from '$app/forms';
+	import { resolve } from '$app/paths';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import {
 		formatTime,
@@ -60,8 +61,58 @@
 		};
 	};
 
+	// Ответ 409 на токен другого бота: ждём подтверждения удаления Каналов.
+	let replace = $derived(form && 'replace' in form ? form.replace : null);
+
+	const disconnect: SubmitFunction = (input) => {
+		const channels =
+			data.channels.length > 0
+				? ` Будут удалены ${plural(data.channels.length, ['канал', 'канала', 'каналов'])} оповещения.`
+				: '';
+		if (!confirm(`Отключить Telegram?${channels}`)) return input.cancel();
+		return submit(input);
+	};
+
 	let createErrors = $derived(form && 'action' in form && form.action === 'create' ? form : null);
 </script>
+
+{#snippet tokenForm(label: string)}
+	{#if replace}
+		<div
+			class="space-y-3 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
+		>
+			<p>
+				Это другой бот. Его подключение удалит {plural(replace.channelsCount, [
+					'канал',
+					'канала',
+					'каналов'
+				])} оповещения — их придётся подключить заново.
+			</p>
+			<form method="POST" action="?/connect" class="flex flex-wrap gap-2" use:enhance={submit}>
+				<input type="hidden" name="token" value={replace.token} />
+				<input type="hidden" name="confirm_replace" value="true" />
+				<button class="btn-danger" disabled={busy}>Сменить бота и удалить каналы</button>
+				<a class="btn-secondary" href={resolve('/channels')}>Отмена</a>
+			</form>
+		</div>
+	{:else}
+		<form method="POST" action="?/connect" class="flex flex-wrap gap-2" use:enhance={submit}>
+			<input
+				class="input max-w-md"
+				name="token"
+				type="password"
+				autocomplete="off"
+				required
+				placeholder="123456:ABC-DEF…"
+				aria-label="Токен бота"
+			/>
+			<button class="btn-primary" disabled={busy}>{label}</button>
+		</form>
+		{#if errorsFor('connect').token || errorsFor('connect')['']}
+			<p class="field-error">{errorsFor('connect').token ?? errorsFor('connect')['']}</p>
+		{/if}
+	{/if}
+{/snippet}
 
 <svelte:head>
 	<title>Каналы оповещения · Healthchecker</title>
@@ -78,25 +129,29 @@
 				<li>Создайте бота у @BotFather командой <code>/newbot</code>.</li>
 				<li>Вставьте выданный токен ниже.</li>
 			</ol>
-			<form method="POST" action="?/connect" class="flex flex-wrap gap-2" use:enhance={submit}>
-				<input
-					class="input max-w-md"
-					name="token"
-					type="password"
-					autocomplete="off"
-					required
-					placeholder="123456:ABC-DEF…"
-					aria-label="Токен бота"
-				/>
-				<button class="btn-primary" disabled={busy}>Подключить</button>
-			</form>
-			{#if errorsFor('connect').token || errorsFor('connect')['']}
-				<p class="field-error">{errorsFor('connect').token ?? errorsFor('connect')['']}</p>
-			{/if}
+			{@render tokenForm('Подключить')}
 		{:else}
-			<p class="text-sm">
-				Бот <span class="font-medium">@{data.telegram.bot_username}</span> подключён.
-			</p>
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<p class="text-sm">
+					Бот <span class="font-medium">@{data.telegram.bot_username}</span> подключён.
+				</p>
+				<form method="POST" action="?/disconnect" use:enhance={disconnect}>
+					<button class="btn-danger" disabled={busy}>Отключить Telegram</button>
+				</form>
+			</div>
+			<details
+				class="text-sm"
+				open={replace !== null || Object.keys(errorsFor('connect')).length > 0 || undefined}
+			>
+				<summary class="cursor-pointer text-indigo-600 dark:text-indigo-400">Сменить бота</summary>
+				<div class="mt-3 space-y-3">
+					<p class="text-zinc-600 dark:text-zinc-400">
+						Токен того же бота сохранит каналы. Токен другого бота удалит все Каналы оповещения —
+						перед этим попросим подтверждение.
+					</p>
+					{@render tokenForm('Сохранить токен')}
+				</div>
+			</details>
 			<p class="text-sm text-zinc-600 dark:text-zinc-400">
 				Добавьте бота в группу или напишите ему в личные сообщения, затем нажмите «Найти чаты».
 				Telegram хранит такие события 24 часа.

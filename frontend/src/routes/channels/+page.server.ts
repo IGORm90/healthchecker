@@ -19,16 +19,30 @@ export const load: PageServerLoad = async ({ fetch }) => {
 
 export const actions: Actions = {
 	connect: async ({ request, fetch }) => {
-		const token = String((await request.formData()).get('token') ?? '').trim();
+		const form = await request.formData();
+		const token = String(form.get('token') ?? '').trim();
+		const confirmReplace = form.get('confirm_replace') === 'true';
 		try {
 			await api<TelegramConnection>(fetch, '/api/telegram', {
 				method: 'PUT',
-				body: JSON.stringify({ token })
+				body: JSON.stringify({ token, confirm_replace: confirmReplace })
 			});
 		} catch (e) {
-			if (e instanceof ApiFormError) return fail(e.status, { action: 'connect', errors: e.errors });
+			if (e instanceof ApiFormError) {
+				// Другой бот: токен возвращается в форму подтверждения, чтобы не вводить его заново.
+				const detail = e.detail as { code?: string; channels_count?: number } | undefined;
+				const replace =
+					detail?.code === 'bot_change'
+						? { token, channelsCount: detail.channels_count ?? 0 }
+						: null;
+				return fail(e.status, { action: 'connect', errors: e.errors, replace });
+			}
 			throw e;
 		}
+	},
+
+	disconnect: async ({ fetch }) => {
+		await api<void>(fetch, '/api/telegram', { method: 'DELETE' });
 	},
 
 	discover: async ({ fetch }) => {
