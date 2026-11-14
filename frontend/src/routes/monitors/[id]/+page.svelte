@@ -110,6 +110,7 @@
 				</table>
 			</div>
 		{/if}
+		<p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">Проверки хранятся 3 дня.</p>
 	</section>
 
 	<a class="text-sm text-indigo-600 hover:underline dark:text-indigo-400" href={resolve('/')}

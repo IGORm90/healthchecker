@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from app.api import channels, health, monitors, telegram
 from app.db.session import SessionLocal, engine
+from app.monitoring.retention import run_retention
 from app.monitoring.runner import create_http_client
 from app.monitoring.scheduler import Alert, Scheduler
 from app.notifications.alerts import send_alert
@@ -23,11 +24,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async def notify(alert: Alert) -> None:
             await send_alert(SessionLocal, app.state.telegram, alert)
 
-        scheduler = asyncio.create_task(Scheduler(SessionLocal, checks_http, notify).run())
+        tasks = [
+            asyncio.create_task(Scheduler(SessionLocal, checks_http, notify).run()),
+            asyncio.create_task(run_retention(SessionLocal)),
+        ]
         yield
-        scheduler.cancel()
-        with suppress(asyncio.CancelledError):
-            await scheduler
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            with suppress(asyncio.CancelledError):
+                await task
     await engine.dispose()
 
 
