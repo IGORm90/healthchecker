@@ -30,6 +30,10 @@
 	@apply btn border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800;
 }
 
+@utility btn-danger {
+	@apply btn border border-red-300 bg-white text-red-700 hover:bg-red-50 dark:border-red-500/40 dark:bg-zinc-900 dark:text-red-400 dark:hover:bg-red-500/10;
+}
+
 @utility input {
 	@apply block w-full rounded-md border-zinc-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900;
 }

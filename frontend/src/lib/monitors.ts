@@ -55,6 +55,23 @@ export const NEW_MONITOR: MonitorInput = {
 	channel_ids: []
 };
 
+/** Значения формы правки из сохранённого Монитора. */
+export function toInput(monitor: Monitor): MonitorInput {
+	const { name, url, method, headers, body, expected_status, expected_body } = monitor;
+	const { interval_seconds, channel_ids } = monitor;
+	return {
+		name,
+		url,
+		method,
+		headers,
+		body,
+		expected_status,
+		expected_body,
+		interval_seconds,
+		channel_ids
+	};
+}
+
 export type NotificationChannel = {
 	id: number;
 	name: string;

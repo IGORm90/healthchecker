@@ -23,7 +23,21 @@
 		</p>
 	</div>
 	<div class="flex flex-wrap gap-2">
+		<a class="btn-secondary" href={resolve('/monitors/[id]/edit', { id: String(monitor.id) })}
+			>Изменить</a
+		>
 		<PauseButton {monitor} />
+		<form
+			method="POST"
+			action="?/delete"
+			onsubmit={(event) => {
+				if (!confirm(`Удалить монитор «${monitor.name}» вместе с историей проверок?`)) {
+					event.preventDefault();
+				}
+			}}
+		>
+			<button class="btn-danger">Удалить</button>
+		</form>
 	</div>
 </div>
 

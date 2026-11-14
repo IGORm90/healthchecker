@@ -14,12 +14,15 @@
 		values,
 		errors = {},
 		channels,
-		submitLabel
+		submitLabel,
+		monitorId
 	}: {
 		values: MonitorInput;
 		errors?: Record<string, string>;
 		channels: NotificationChannel[];
 		submitLabel: string;
+		/** Монитор, который правится: «Отмена» ведёт на его страницу, а не в список. */
+		monitorId?: number;
 	} = $props();
 
 	// Поля, которые меняют форму на лету; остальные — обычные поля с начальным значением.
@@ -206,6 +209,11 @@
 
 	<div class="flex gap-3">
 		<button class="btn-primary" disabled={submitting}>{submitLabel}</button>
-		<a class="btn-secondary" href={resolve('/')}>Отмена</a>
+		<a
+			class="btn-secondary"
+			href={monitorId === undefined
+				? resolve('/')
+				: resolve('/monitors/[id]', { id: String(monitorId) })}>Отмена</a
+		>
 	</div>
 </form>

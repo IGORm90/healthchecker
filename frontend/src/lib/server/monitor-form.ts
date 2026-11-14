@@ -1,4 +1,12 @@
+import { error } from '@sveltejs/kit';
 import type { MonitorInput } from '#lib/monitors.ts';
+
+/** id Монитора из параметра маршрута; иначе — 404. */
+export function monitorIdParam(raw: string): number {
+	const id = Number(raw);
+	if (!Number.isInteger(id) || id <= 0) error(404, 'Монитор не найден');
+	return id;
+}
 
 function text(form: FormData, name: string): string {
 	return String(form.get(name) ?? '').trim();
