@@ -16,3 +16,17 @@ export const LOGIN_ERRORS: Record<string, string> = {
 	failed: 'Telegram не подтвердил вход. Попробуйте ещё раз.',
 	not_configured: 'Вход через Telegram не настроен на сервере.'
 };
+
+/** Пользователь в разделе Суперадмина: ответ `GET /api/admin/users`. */
+export type UserSummary = {
+	id: number;
+	telegram_id: number;
+	name: string;
+	username: string | null;
+	photo_url: string | null;
+	created_at: string;
+	last_login_at: string;
+	blocked_at: string | null;
+	is_superadmin: boolean;
+	monitors_count: number;
+};

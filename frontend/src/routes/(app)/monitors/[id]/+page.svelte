@@ -23,21 +23,26 @@
 		</p>
 	</div>
 	<div class="flex flex-wrap gap-2">
-		<a class="btn-secondary" href={resolve('/(app)/monitors/[id]/edit', { id: String(monitor.id) })}
-			>Изменить</a
-		>
+		{#if data.isOwner}
+			<a
+				class="btn-secondary"
+				href={resolve('/(app)/monitors/[id]/edit', { id: String(monitor.id) })}>Изменить</a
+			>
+		{/if}
 		<PauseButton {monitor} />
-		<form
-			method="POST"
-			action="?/delete"
-			onsubmit={(event) => {
-				if (!confirm(`Удалить монитор «${monitor.name}» вместе с историей проверок?`)) {
-					event.preventDefault();
-				}
-			}}
-		>
-			<button class="btn-danger">Удалить</button>
-		</form>
+		{#if data.isOwner}
+			<form
+				method="POST"
+				action="?/delete"
+				onsubmit={(event) => {
+					if (!confirm(`Удалить монитор «${monitor.name}» вместе с историей проверок?`)) {
+						event.preventDefault();
+					}
+				}}
+			>
+				<button class="btn-danger">Удалить</button>
+			</form>
+		{/if}
 	</div>
 </div>
 
@@ -58,14 +63,26 @@
 			<dt class="text-zinc-500 dark:text-zinc-400">Проверять каждые</dt>
 			<dd>{intervalLabel(monitor.interval_seconds)}</dd>
 
-			<dt class="text-zinc-500 dark:text-zinc-400">Каналы оповещения</dt>
-			<dd>
-				{#if data.channels.length > 0}
-					{data.channels.map((channel) => channel.name).join(', ')}
-				{:else}
-					<span class="text-zinc-500 dark:text-zinc-400">нет</span>
-				{/if}
-			</dd>
+			{#if data.isOwner}
+				<dt class="text-zinc-500 dark:text-zinc-400">Каналы оповещения</dt>
+				<dd>
+					{#if data.channels.length > 0}
+						{data.channels.map((channel) => channel.name).join(', ')}
+					{:else}
+						<span class="text-zinc-500 dark:text-zinc-400">нет</span>
+					{/if}
+				</dd>
+			{:else if data.owner}
+				<dt class="text-zinc-500 dark:text-zinc-400">Владелец</dt>
+				<dd>
+					<a
+						class="text-indigo-600 hover:underline dark:text-indigo-400"
+						href={resolve('/(app)/admin/users/[id]', { id: String(monitor.user_id) })}
+						>{data.owner.name}</a
+					>{#if data.owner.username}
+						<span class="text-zinc-500 dark:text-zinc-400">@{data.owner.username}</span>{/if}
+				</dd>
+			{/if}
 		</dl>
 	</section>
 

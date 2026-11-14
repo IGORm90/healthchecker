@@ -21,6 +21,9 @@
 				<nav class="flex gap-1">
 					<NavLink route="/(app)">Мониторы</NavLink>
 					<NavLink route="/(app)/channels">Каналы оповещения</NavLink>
+					{#if data.user.is_superadmin}
+						<NavLink route="/(app)/admin/users">Пользователи</NavLink>
+					{/if}
 				</nav>
 				<div class="ml-auto flex items-center gap-3 text-sm">
 					<span class="text-zinc-600 dark:text-zinc-400" title={data.user.username ?? undefined}

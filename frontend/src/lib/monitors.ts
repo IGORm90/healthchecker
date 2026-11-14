@@ -6,6 +6,8 @@ export type Header = { name: string; value: string };
 
 export type Monitor = {
 	id: number;
+	// Владелец: Суперадмин видит и чужие мониторы.
+	user_id: number;
 	name: string;
 	url: string;
 	method: string;
