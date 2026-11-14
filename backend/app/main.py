@@ -1,26 +1,28 @@
 import asyncio
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
+import httpx
 from fastapi import FastAPI
 
-from app.api import health, monitors
+from app.api import channels, health, monitors, telegram
 from app.db.session import SessionLocal, engine
 from app.monitoring.runner import create_http_client
 from app.monitoring.scheduler import Alert, Scheduler
-
-logger = logging.getLogger(__name__)
-
-
-async def notify(alert: Alert) -> None:
-    # Заглушка до шага 4 плана 0002: отправка Оповещений в Telegram.
-    logger.warning("Оповещение %s о мониторе %s", alert.kind, alert.monitor.id)
+from app.notifications.alerts import send_alert
+from app.notifications.telegram import TelegramClient
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    async with create_http_client() as checks_http:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Клиенты разные: мониторы не следуют редиректам и проходят SSRF-фильтр,
+    # а Telegram — доверенный адрес.
+    async with create_http_client() as checks_http, httpx.AsyncClient() as telegram_http:
+        app.state.telegram = TelegramClient(telegram_http)
+
+        async def notify(alert: Alert) -> None:
+            await send_alert(SessionLocal, app.state.telegram, alert)
+
         scheduler = asyncio.create_task(Scheduler(SessionLocal, checks_http, notify).run())
         yield
         scheduler.cancel()
@@ -32,3 +34,5 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Healthchecker", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(monitors.router)
+app.include_router(telegram.router)
+app.include_router(channels.router)

@@ -1,15 +1,20 @@
+import json
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
+from typing import Any
 
+import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 import app.models  # noqa: F401 — регистрирует модели в Base.metadata
+from app.api.telegram import get_telegram
 from app.db.base import Base
 from app.db.session import create_engine, get_session
 from app.main import app
 from app.monitoring import ssrf
+from app.notifications.telegram import TelegramClient
 
 # Публичный адрес, в который по умолчанию «резолвится» любое имя в тестах.
 PUBLIC_IP = "93.184.215.14"
@@ -79,3 +84,54 @@ def allow_private_targets(monkeypatch: pytest.MonkeyPatch) -> Callable[[bool], N
         monkeypatch.setattr(settings, "allow_private_targets", value)
 
     return set_flag
+
+
+class FakeTelegram:
+    """Telegram Bot API в памяти: боты по токенам, очередь обновлений, отправленные сообщения."""
+
+    def __init__(self) -> None:
+        self.bots: dict[str, dict[str, Any]] = {
+            "token-alpha": {"id": 1, "username": "alpha_bot"},
+            "token-beta": {"id": 2, "username": "beta_bot"},
+        }
+        self.updates: list[dict[str, Any]] = []
+        self.sent: list[tuple[int, str]] = []
+        # Чаты, из которых бота удалили: отправка в них падает.
+        self.kicked_from: set[int] = set()
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        _, bot_token, method = request.url.path.split("/")
+        token = bot_token.removeprefix("bot")
+        params = json.loads(request.content or b"{}")
+        if token not in self.bots:
+            return httpx.Response(401, json={"ok": False, "description": "Unauthorized"})
+        match method:
+            case "getMe":
+                return self._ok(self.bots[token])
+            case "getUpdates":
+                return self._ok([u for u in self.updates if u["update_id"] >= params["offset"]])
+            case "sendMessage":
+                if params["chat_id"] in self.kicked_from:
+                    return httpx.Response(
+                        403, json={"ok": False, "description": "Forbidden: bot was kicked"}
+                    )
+                self.sent.append((params["chat_id"], params["text"]))
+                return self._ok({"message_id": len(self.sent)})
+        return httpx.Response(404, json={"ok": False, "description": "Not Found"})
+
+    @staticmethod
+    def _ok(result: Any) -> httpx.Response:
+        return httpx.Response(200, json={"ok": True, "result": result})
+
+
+@pytest.fixture
+async def fake_telegram(client: AsyncClient) -> AsyncIterator[FakeTelegram]:
+    fake = FakeTelegram()
+    async with httpx.AsyncClient(transport=httpx.MockTransport(fake.handle)) as http:
+        app.dependency_overrides[get_telegram] = lambda: TelegramClient(http)
+        yield fake
+
+
+@pytest.fixture
+def telegram_client(fake_telegram: FakeTelegram) -> TelegramClient:
+    return app.dependency_overrides[get_telegram]()

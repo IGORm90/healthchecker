@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.errors import validation_error
 from app.core.config import settings
 from app.db.session import get_session
 from app.db.types import utcnow
@@ -26,14 +27,6 @@ _last_check_at = (
     .correlate(Monitor)
     .scalar_subquery()
 )
-
-
-def _validation_error(field: str, message: str, error_type: str) -> HTTPException:
-    # Тот же формат, что у ошибок валидации FastAPI, чтобы фронт разбирал их одинаково.
-    return HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        detail=[{"loc": ["body", field], "msg": message, "type": error_type}],
-    )
 
 
 def _to_out(monitor: Monitor, last_check_at: datetime | None) -> MonitorOut:
@@ -75,7 +68,7 @@ async def _validated_fields(session: AsyncSession, data: MonitorIn) -> dict[str,
     try:
         await ensure_target_allowed(url, allow_private=settings.allow_private_targets)
     except ForbiddenTarget as exc:
-        raise _validation_error("url", str(exc), "forbidden_target") from exc
+        raise validation_error("url", str(exc), "forbidden_target") from exc
 
     channels = list(
         await session.scalars(
@@ -85,7 +78,7 @@ async def _validated_fields(session: AsyncSession, data: MonitorIn) -> dict[str,
     missing = set(data.channel_ids) - {c.id for c in channels}
     if missing:
         ids = ", ".join(map(str, sorted(missing)))
-        raise _validation_error(
+        raise validation_error(
             "channel_ids", f"Каналы оповещения не найдены: {ids}", "unknown_channel"
         )
 
