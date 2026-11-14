@@ -1,5 +1,8 @@
 <script lang="ts">
-	let { title, description }: { title: string; description: string } = $props();
+	import type { Snippet } from 'svelte';
+
+	let { title, description, children }: { title: string; description: string; children?: Snippet } =
+		$props();
 </script>
 
 <div
@@ -7,4 +10,7 @@
 >
 	<p class="font-medium text-zinc-900 dark:text-zinc-100">{title}</p>
 	<p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
+	{#if children}
+		<div class="mt-4">{@render children()}</div>
+	{/if}
 </div>

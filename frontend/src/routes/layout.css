@@ -2,9 +2,50 @@
 @plugin '@tailwindcss/forms';
 
 /* Цвета Состояний монитора: bg-state-up, text-state-down и т. д. */
-@theme {
+@theme inline {
 	--color-state-unknown: var(--color-zinc-400);
 	--color-state-up: var(--color-emerald-500);
 	--color-state-down: var(--color-red-500);
 	--color-state-paused: var(--color-amber-500);
+}
+
+@layer base {
+	/* Фон и схема — на html: иначе при прокрутке за край видна белая полоса,
+	   а скроллбары и поля форм остаются светлыми в тёмной теме. */
+	html {
+		@apply bg-zinc-50 text-zinc-900 scheme-light dark:bg-zinc-950 dark:text-zinc-100 dark:scheme-dark;
+	}
+}
+
+/* Общие элементы интерфейса: утилиты, чтобы работали варианты и @apply. */
+@utility btn {
+	@apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:opacity-50;
+}
+
+@utility btn-primary {
+	@apply btn bg-indigo-600 text-white hover:bg-indigo-500;
+}
+
+@utility btn-secondary {
+	@apply btn border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800;
+}
+
+@utility input {
+	@apply block w-full rounded-md border-zinc-300 bg-white text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900;
+}
+
+@utility label {
+	@apply mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300;
+}
+
+@utility hint {
+	@apply mt-1 text-xs text-zinc-500 dark:text-zinc-400;
+}
+
+@utility field-error {
+	@apply mt-1 text-sm text-red-600 dark:text-red-400;
+}
+
+@utility card {
+	@apply rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900;
 }
