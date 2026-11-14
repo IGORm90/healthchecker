@@ -57,8 +57,8 @@ migration: ## Создать миграцию: make migration m="описани�
 	@test -n "$(m)" || { echo 'Укажите описание: make migration m="описание"'; exit 1; }
 	cd backend && $(BACKEND_DB) uv run alembic revision --autogenerate -m "$(m)"
 
-up: ## Собрать и запустить в Docker
-	docker compose up --build
+up: ## Собрать и запустить в Docker в фоне
+	docker compose up --build -d
 
 down: ## Остановить контейнеры (том с базой сохраняется)
 	docker compose down

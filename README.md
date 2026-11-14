@@ -38,7 +38,7 @@ make install   # зависимости backend и frontend
 make dev       # backend на :8000 и frontend на :5173, Ctrl+C останавливает оба
 make check     # линтеры, типы, тесты и проверка, что модели не разошлись с миграциями
 make format    # автоформатирование
-make up        # то же, что docker compose up --build
+make up        # docker compose up --build -d; логи — make logs, остановка — make down
 ```
 
 Backend и frontend можно запускать по отдельности: `make backend-dev`, `make frontend-dev`. Локальная база — `backend/app.db`; другой путь задаётся через `make DATABASE_URL=... <цель>` или `backend/.env`. Frontend в режиме разработки обращается к API по `API_URL=http://localhost:8000`.
