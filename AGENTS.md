@@ -18,6 +18,7 @@ Healthchecker: FastAPI + SQLite (backend) и SvelteKit SSR (frontend), запу�
 
 ## Конвенции
 
+- Вся работа идёт прямо в ветке `main`: feature-ветки и worktree не создаются.
 - Коммиты — Conventional Commits на английском.
 - Документация (README, планы, глоссарий, ADR) — на русском.
 - Python 3.14, зависимости только через `uv`; `uv.lock` и `package-lock.json` коммитятся.
