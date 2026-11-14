@@ -29,39 +29,25 @@ docker compose up --build
 
 Страница — http://localhost:3000. База лежит в томе `sqlite_data` и переживает `docker compose down` (но не `down -v`).
 
-## Локальная разработка
+## Команды
 
-Backend:
-
-```sh
-cd backend
-echo 'DATABASE_URL=sqlite+aiosqlite:///./app.db' > .env
-uv sync
-uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
-```
-
-Frontend (при запущенном backend):
+Повседневные команды собраны в `Makefile`; полный список — `make help`.
 
 ```sh
-cd frontend
-npm install
-API_URL=http://localhost:8000 npm run dev
+make install   # зависимости backend и frontend
+make dev       # backend на :8000 и frontend на :5173, Ctrl+C останавливает оба
+make check     # линтеры, типы, тесты и проверка, что модели не разошлись с миграциями
+make format    # автоформатирование
+make up        # то же, что docker compose up --build
 ```
 
-## Тесты и линтеры
-
-```sh
-cd backend && uv run pytest && uv run ruff check . && uv run ruff format --check .
-cd frontend && npm run check && npm run lint
-```
+Backend и frontend можно запускать по отдельности: `make backend-dev`, `make frontend-dev`. Локальная база — `backend/app.db`; другой путь задаётся через `make DATABASE_URL=... <цель>` или `backend/.env`. Frontend в режиме разработки обращается к API по `API_URL=http://localhost:8000`.
 
 ## Миграции
 
 ```sh
-cd backend
-uv run alembic revision --autogenerate -m "описание"
-uv run alembic upgrade head
+make migration m="описание"   # alembic revision --autogenerate
+make migrate                  # alembic upgrade head
 ```
 
 В контейнере миграции применяются автоматически при старте.

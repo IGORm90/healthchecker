@@ -21,3 +21,4 @@ Healthchecker: FastAPI + SQLite (backend) и SvelteKit SSR (frontend), запу�
 - Коммиты — Conventional Commits на английском.
 - Документация (README, планы, глоссарий, ADR) — на русском.
 - Python 3.14, зависимости только через `uv`; `uv.lock` и `package-lock.json` коммитятся.
+- Проверки перед коммитом — `make check`; остальные команды — `make help`.
