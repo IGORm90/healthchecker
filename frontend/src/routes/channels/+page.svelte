@@ -1,7 +1,12 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { enhance, type SubmitFunction } from '$app/forms';
 	import EmptyState from '#lib/components/EmptyState.svelte';
-	import { formatTime, type DiscoveredChat } from '#lib/monitors.ts';
+	import {
+		formatTime,
+		plural,
+		type DiscoveredChat,
+		type NotificationChannel
+	} from '#lib/monitors.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -14,7 +19,7 @@
 	});
 
 	let busy = $state(false);
-	const submit: Parameters<typeof enhance>[1] = () => {
+	const submit: SubmitFunction = () => {
 		busy = true;
 		return async ({ update }) => {
 			await update();
@@ -25,6 +30,35 @@
 	function errorsFor(action: string) {
 		return form && 'action' in form && form.action === action ? form.errors : {};
 	}
+
+	/** Ошибка действия над конкретным Каналом оповещения. */
+	function channelError(action: string, id: number): string | null {
+		if (!form || !('channelId' in form) || form.action !== action || form.channelId !== id) {
+			return null;
+		}
+		return Object.values(form.errors).join('; ');
+	}
+
+	// confirm() — в enhance: preventDefault() в onsubmit enhance не останавливает.
+	function deleteChannel(channel: NotificationChannel): SubmitFunction {
+		return (input) => {
+			const usage =
+				channel.monitors_count > 0
+					? ` Его используют ${plural(channel.monitors_count, ['монитор', 'монитора', 'мониторов'])} — канал будет от них отвязан.`
+					: '';
+			if (!confirm(`Удалить канал оповещения «${channel.name}»?${usage}`)) return input.cancel();
+			return submit(input);
+		};
+	}
+
+	const rename: SubmitFunction = ({ formElement }) => {
+		busy = true;
+		return async ({ result, update }) => {
+			if (result.type === 'success') formElement.closest('details')?.removeAttribute('open');
+			await update();
+			busy = false;
+		};
+	};
 
 	let createErrors = $derived(form && 'action' in form && form.action === 'create' ? form : null);
 </script>
@@ -145,18 +179,73 @@
 						<th class="px-4 py-3 font-medium">Название</th>
 						<th class="px-4 py-3 font-medium">Мониторов</th>
 						<th class="px-4 py-3 font-medium whitespace-nowrap">Последняя отправка</th>
+						<th class="px-4 py-3"><span class="sr-only">Действия</span></th>
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-zinc-200 dark:divide-zinc-800">
 					{#each data.channels as channel (channel.id)}
 						<tr>
-							<td class="px-4 py-3 font-medium">{channel.name}</td>
+							<td class="px-4 py-3 font-medium">
+								{channel.name}
+								{#if channelError('rename', channel.id) !== null}
+									<p class="field-error font-normal">{channelError('rename', channel.id)}</p>
+								{/if}
+							</td>
 							<td class="px-4 py-3">{channel.monitors_count}</td>
 							<td class="px-4 py-3">
 								<span class="whitespace-nowrap">{formatTime(channel.last_delivery_at)}</span>
 								{#if channel.last_delivery_error}
 									<p class="text-red-600 dark:text-red-400">{channel.last_delivery_error}</p>
 								{/if}
+								{#if channelError('test', channel.id) !== null}
+									<p class="field-error">{channelError('test', channel.id)}</p>
+								{/if}
+							</td>
+							<td class="px-4 py-3">
+								<div class="flex flex-wrap justify-end gap-2">
+									<form method="POST" action="?/test" use:enhance={submit}>
+										<input type="hidden" name="id" value={channel.id} />
+										<button class="btn-secondary" disabled={busy}>Тест</button>
+									</form>
+									<details
+										class="group"
+										open={channelError('rename', channel.id) !== null || undefined}
+									>
+										<summary class="btn-secondary cursor-pointer list-none group-open:hidden"
+											>Переименовать</summary
+										>
+										<form
+											method="POST"
+											action="?/rename"
+											class="flex flex-wrap gap-2"
+											use:enhance={rename}
+										>
+											<input type="hidden" name="id" value={channel.id} />
+											<input
+												class="input w-48"
+												name="name"
+												required
+												maxlength="200"
+												value={form && 'name' in form && channelError('rename', channel.id) !== null
+													? form.name
+													: channel.name}
+												aria-label="Новое название канала «{channel.name}»"
+											/>
+											<button class="btn-primary" disabled={busy}>Сохранить</button>
+											<button
+												type="button"
+												class="btn-secondary"
+												onclick={(event) =>
+													event.currentTarget.closest('details')?.removeAttribute('open')}
+												>Отмена</button
+											>
+										</form>
+									</details>
+									<form method="POST" action="?/delete" use:enhance={deleteChannel(channel)}>
+										<input type="hidden" name="id" value={channel.id} />
+										<button class="btn-danger" disabled={busy}>Удалить</button>
+									</form>
+								</div>
 							</td>
 						</tr>
 					{/each}
