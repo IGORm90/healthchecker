@@ -33,7 +33,7 @@
 					<th class="px-4 py-3 font-medium">URL</th>
 					<th class="px-4 py-3 font-medium">Состояние</th>
 					<th class="px-4 py-3 font-medium whitespace-nowrap">Последняя проверка</th>
-					<th class="px-4 py-3"><span class="sr-only">Действия</span></th>
+					<th class="relative px-4 py-3"><span class="sr-only">Действия</span></th>
 				</tr>
 			</thead>
 			<tbody class="divide-y divide-zinc-200 dark:divide-zinc-800">

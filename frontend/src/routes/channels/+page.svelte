@@ -45,7 +45,7 @@
 		return (input) => {
 			const usage =
 				channel.monitors_count > 0
-					? ` Его используют ${plural(channel.monitors_count, ['монитор', 'монитора', 'мониторов'])} — канал будет от них отвязан.`
+					? ` Мониторов с этим каналом: ${channel.monitors_count} — канал будет от них отвязан.`
 					: '';
 			if (!confirm(`Удалить канал оповещения «${channel.name}»?${usage}`)) return input.cancel();
 			return submit(input);
@@ -234,7 +234,7 @@
 						<th class="px-4 py-3 font-medium">Название</th>
 						<th class="px-4 py-3 font-medium">Мониторов</th>
 						<th class="px-4 py-3 font-medium whitespace-nowrap">Последняя отправка</th>
-						<th class="px-4 py-3"><span class="sr-only">Действия</span></th>
+						<th class="relative px-4 py-3"><span class="sr-only">Действия</span></th>
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-zinc-200 dark:divide-zinc-800">
