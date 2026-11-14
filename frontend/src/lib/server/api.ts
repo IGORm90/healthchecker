@@ -81,6 +81,8 @@ export async function api<T>(fetch: Fetch, path: string, init: RequestInit = {})
 	if (res.status === 422 || res.status === 409 || body?.detail?.code) {
 		throw new ApiFormError(res.status, fieldErrors(body?.detail), body?.detail);
 	}
+	// 404 — страница о несуществующем Мониторе или Канале, а не сбой backend.
+	if (res.status === 404) error(404, body?.detail ?? 'Не найдено');
 	console.error(`API ${init.method ?? 'GET'} ${path} → ${res.status}`, body);
 	error(502, body?.detail?.message ?? `Ошибка backend (${res.status})`);
 }

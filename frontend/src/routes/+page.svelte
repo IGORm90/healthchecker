@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import MonitorStateBadge from '#lib/components/MonitorStateBadge.svelte';
+	import PauseButton from '#lib/components/PauseButton.svelte';
 	import { formatTime } from '#lib/monitors.ts';
 	import type { PageProps } from './$types';
 
@@ -32,12 +33,18 @@
 					<th class="px-4 py-3 font-medium">URL</th>
 					<th class="px-4 py-3 font-medium">Состояние</th>
 					<th class="px-4 py-3 font-medium whitespace-nowrap">Последняя проверка</th>
+					<th class="px-4 py-3"><span class="sr-only">Действия</span></th>
 				</tr>
 			</thead>
 			<tbody class="divide-y divide-zinc-200 dark:divide-zinc-800">
 				{#each data.monitors as monitor (monitor.id)}
 					<tr>
-						<td class="px-4 py-3 font-medium">{monitor.name}</td>
+						<td class="px-4 py-3 font-medium">
+							<a
+								class="text-indigo-600 hover:underline dark:text-indigo-400"
+								href={resolve('/monitors/[id]', { id: String(monitor.id) })}>{monitor.name}</a
+							>
+						</td>
 						<td
 							class="max-w-xs truncate px-4 py-3 text-zinc-600 dark:text-zinc-400"
 							title={monitor.url}
@@ -49,6 +56,7 @@
 						<td class="px-4 py-3 whitespace-nowrap text-zinc-600 dark:text-zinc-400">
 							{formatTime(monitor.last_check_at)}
 						</td>
+						<td class="px-4 py-3 text-right"><PauseButton {monitor} /></td>
 					</tr>
 				{/each}
 			</tbody>

@@ -5,7 +5,8 @@
 	import type { Snippet } from 'svelte';
 
 	// Только маршруты без параметров: пункт навигации ведёт на раздел, а не на конкретную запись.
-	let { route, children }: { route: PageRouteId; children: Snippet } = $props();
+	type SectionRoute = Exclude<PageRouteId, `${string}[${string}`>;
+	let { route, children }: { route: SectionRoute; children: Snippet } = $props();
 
 	// Сравниваются id маршрутов, а не пути: resolve() при SSR отдаёт относительную ссылку.
 	// Корень активен только сам по себе, остальные пункты — и на вложенных страницах.

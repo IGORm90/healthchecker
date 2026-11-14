@@ -21,6 +21,15 @@ export type Monitor = {
 	last_check_at: string | null;
 };
 
+export type Check = {
+	id: number;
+	started_at: string;
+	duration_ms: number;
+	status_code: number | null;
+	success: boolean;
+	failure_reason: string | null;
+};
+
 /** Поля Монитора, которые задаёт пользователь (тело запроса создания и правки). */
 export type MonitorInput = {
 	name: string;
@@ -79,6 +88,10 @@ export const INTERVALS: { seconds: number; label: string }[] = [
 	{ seconds: 900, label: '15 минут' },
 	{ seconds: 3600, label: '1 час' }
 ];
+
+export function intervalLabel(seconds: number): string {
+	return INTERVALS.find((interval) => interval.seconds === seconds)?.label ?? `${seconds} с`;
+}
 
 // Пояс фиксирован: страница рендерится на сервере, и время не должно зависеть от его пояса.
 // UTC — как в текстах Оповещений.
