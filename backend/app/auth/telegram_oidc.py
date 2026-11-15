@@ -152,12 +152,24 @@ class TelegramOidc:
 
     @staticmethod
     def _identity(claims: dict[str, Any]) -> TelegramIdentity:
-        if not isinstance(claims.get("id"), int):
-            raise OidcError("в ID-токене нет Telegram ID: нужен scope profile")
+        telegram_id = _telegram_id(claims.get("id"))
+        if telegram_id is None:
+            # Только имена полей: значения — персональные данные.
+            received = ", ".join(sorted(claims))
+            raise OidcError(f"в ID-токене нет Telegram ID (поля: {received}): нужен scope profile")
         return TelegramIdentity(
             sub=str(claims["sub"]),
-            telegram_id=claims["id"],
-            name=claims.get("name") or claims.get("preferred_username") or str(claims["id"]),
+            telegram_id=telegram_id,
+            name=claims.get("name") or claims.get("preferred_username") or str(telegram_id),
             username=claims.get("preferred_username"),
             photo_url=claims.get("picture"),
         )
+
+
+def _telegram_id(value: object) -> int | None:
+    """В документации Telegram ID — число, но на деле может прийти строкой."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.isascii() and value.isdigit():
+        return int(value)
+    return None

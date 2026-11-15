@@ -200,6 +200,32 @@ async def test_invalid_claims_are_rejected(
     assert await count(session_factory, User) == 0
 
 
+async def test_telegram_id_as_string_is_accepted(
+    anonymous_client: AsyncClient, oauth: FakeTelegramOAuth, session_factory: SessionFactory
+) -> None:
+    oauth.claims = oauth.valid_claims(id=str(TELEGRAM_ID))
+
+    response = await sign_in(anonymous_client)
+
+    assert response.status_code == 200, response.text
+    async with session_factory() as session:
+        [user] = await session.scalars(select(User))
+    assert user.telegram_id == TELEGRAM_ID
+
+
+async def test_missing_telegram_id_names_received_claims(
+    anonymous_client: AsyncClient, oauth: FakeTelegramOAuth, session_factory: SessionFactory
+) -> None:
+    oauth.claims = oauth.valid_claims()
+    del oauth.claims["id"]
+
+    response = await sign_in(anonymous_client)
+
+    assert response.status_code == 400
+    assert "preferred_username" in response.json()["detail"]["message"]
+    assert await count(session_factory, User) == 0
+
+
 async def test_foreign_signature_is_rejected(
     anonymous_client: AsyncClient, oauth: FakeTelegramOAuth, session_factory: SessionFactory
 ) -> None:
