@@ -17,5 +17,6 @@ export const GET: RequestHandler = async ({ fetch, cookies, url }) => {
 		throw e;
 	}
 	setOidcCookies(cookies, url, authorization.state, authorization.code_verifier);
-	redirect(303, authorization.url);
+	// SvelteKit 3 без явного разрешения отклоняет редирект на чужой origin.
+	redirect(303, authorization.url, { external: ['https://oauth.telegram.org'] });
 };
