@@ -1,6 +1,11 @@
 import { error, fail } from '@sveltejs/kit';
-import type { DiscoveredChat, NotificationChannel, TelegramConnection } from '#lib/monitors.ts';
-import { api, ApiFormError } from '#lib/server/api.ts';
+import type {
+	DiscoveredChat,
+	NotificationChannel,
+	NotificationChannelCreated,
+	TelegramConnection
+} from '#lib/monitors.ts';
+import { api, ApiFormError, type FieldErrors } from '#lib/server/api.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 function channelId(form: FormData): number {
@@ -61,8 +66,9 @@ export const actions: Actions = {
 	create: async ({ request, fetch }) => {
 		const form = await request.formData();
 		const chatId = Number(form.get('telegram_chat_id'));
+		let created: NotificationChannelCreated;
 		try {
-			await api<NotificationChannel>(fetch, '/api/channels', {
+			created = await api<NotificationChannelCreated>(fetch, '/api/channels', {
 				method: 'POST',
 				body: JSON.stringify({
 					name: String(form.get('name') ?? '').trim(),
@@ -75,7 +81,11 @@ export const actions: Actions = {
 			}
 			throw e;
 		}
-		return { created: chatId };
+		// Канал создан и тогда, когда приветственное сообщение не дошло: ошибку показываем у него.
+		const welcome = created.test_message_error
+			? { channelId: created.id, error: created.test_message_error }
+			: null;
+		return { created: chatId, welcome };
 	},
 
 	test: async ({ request, fetch }) => {
@@ -88,6 +98,7 @@ export const actions: Actions = {
 			}
 			throw e;
 		}
+		return { action: 'test', channelId: id, errors: {} as FieldErrors, sent: true };
 	},
 
 	rename: async ({ request, fetch }) => {

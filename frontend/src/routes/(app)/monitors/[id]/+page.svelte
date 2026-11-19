@@ -3,11 +3,20 @@
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import MonitorStateBadge from '#lib/components/MonitorStateBadge.svelte';
 	import PauseButton from '#lib/components/PauseButton.svelte';
-	import { formatTime, intervalLabel } from '#lib/monitors.ts';
+	import DeliveryOutcome from '#lib/components/DeliveryOutcome.svelte';
+	import {
+		ALERT_KIND_LABELS,
+		attemptsLabel,
+		deliveryError,
+		failedDeliveries,
+		formatTime,
+		intervalLabel
+	} from '#lib/monitors.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let monitor = $derived(data.monitor);
+	let failed = $derived(failedDeliveries(monitor.pending_deliveries));
 </script>
 
 <svelte:head>
@@ -47,6 +56,28 @@
 </div>
 
 <div class="space-y-6">
+	{#if failed.length > 0}
+		<section
+			class="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
+		>
+			<h2 class="mb-2 font-semibold">Оповещение не доставлено</h2>
+			<ul class="space-y-1">
+				{#each failed as delivery (`${delivery.alert_created_at}-${delivery.channel_id}`)}
+					<li class="break-words">
+						{ALERT_KIND_LABELS[delivery.alert_kind]} в «{delivery.channel_name}»: {deliveryError(
+							delivery
+						)}. {attemptsLabel(delivery.attempts)}, первая — {formatTime(
+							delivery.first_attempt_at
+						)}.
+					</li>
+				{/each}
+			</ul>
+			<p class="mt-2 text-amber-800 dark:text-amber-300">
+				Попытка повторится при следующей проверке монитора.
+			</p>
+		</section>
+	{/if}
+
 	<section class="card p-4 sm:p-6">
 		<dl class="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[12rem_1fr]">
 			<dt class="text-zinc-500 dark:text-zinc-400">Запрос</dt>
@@ -106,6 +137,7 @@
 							<th class="px-4 py-3 font-medium">Длительность</th>
 							<th class="px-4 py-3 font-medium">Код</th>
 							<th class="px-4 py-3 font-medium">Результат</th>
+							<th class="px-4 py-3 font-medium">Оповещение</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -119,6 +151,18 @@
 										<span class="text-emerald-700 dark:text-emerald-400">успех</span>
 									{:else}
 										<span class="text-red-600 dark:text-red-400">{check.failure_reason}</span>
+									{/if}
+								</td>
+								<td class="px-4 py-3">
+									{#if check.alert}
+										<p class="whitespace-nowrap">{ALERT_KIND_LABELS[check.alert.kind]}</p>
+										<ul class="text-xs">
+											{#each check.alert.deliveries as delivery (delivery.channel_id)}
+												<li>
+													{delivery.channel_name}: <DeliveryOutcome {delivery} />
+												</li>
+											{/each}
+										</ul>
 									{/if}
 								</td>
 							</tr>

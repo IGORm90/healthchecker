@@ -2,10 +2,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.models import Check
-from app.monitoring.retention import next_prune_at, prune_checks
+from app.models import Alert, AlertDelivery, AlertKind, Check, DeliveryStatus, NotificationChannel
+from app.monitoring.retention import next_prune_at, prune_history
+from tests.conftest import default_user_id
 
 SessionFactory = async_sessionmaker[AsyncSession]
 
@@ -53,10 +55,61 @@ async def test_checks_older_than_three_days_are_pruned(
     await add_checks(session_factory, first, stale, boundary, fresh)
     await add_checks(session_factory, second, stale, fresh)
 
-    await prune_checks(session_factory, NOW)
+    await prune_history(session_factory, NOW)
 
     assert await history(client, first) == [fresh, boundary]
     assert await history(client, second) == [fresh]
+
+
+async def add_alert(
+    session_factory: SessionFactory,
+    monitor_id: int,
+    created_at: datetime,
+    status: DeliveryStatus,
+    chat_id: int,
+) -> None:
+    """Оповещение «упал» с проверкой в тот же момент и одной Доставкой."""
+    async with session_factory() as session:
+        channel = NotificationChannel(
+            user_id=await default_user_id(session_factory),
+            name=f"chat {status}",
+            telegram_chat_id=chat_id,
+        )
+        check = Check(
+            monitor_id=monitor_id,
+            started_at=created_at,
+            duration_ms=1,
+            status_code=503,
+            success=False,
+        )
+        session.add(
+            Alert(
+                monitor_id=monitor_id,
+                check=check,
+                kind=AlertKind.DOWN,
+                down_since=created_at,
+                created_at=created_at,
+                deliveries=[AlertDelivery(channel=channel, status=status, attempts=1)],
+            )
+        )
+        await session.commit()
+
+
+async def test_old_alerts_are_pruned_unless_still_pending(
+    client: AsyncClient, session_factory: SessionFactory
+) -> None:
+    monitor_id = await create_monitor(client)
+    stale = NOW - timedelta(days=3, seconds=1)
+    await add_alert(session_factory, monitor_id, stale, DeliveryStatus.DELIVERED, chat_id=-100)
+    await add_alert(session_factory, monitor_id, stale, DeliveryStatus.PENDING, chat_id=-200)
+
+    await prune_history(session_factory, NOW)
+
+    assert await history(client, monitor_id) == []
+    [pending] = (await client.get(f"/api/monitors/{monitor_id}")).json()["pending_deliveries"]
+    assert pending["status"] == "pending"
+    async with session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(Alert)) == 1
 
 
 @pytest.mark.parametrize(

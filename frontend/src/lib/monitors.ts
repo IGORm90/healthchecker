@@ -21,6 +21,26 @@ export type Monitor = {
 	state_changed_at: string;
 	next_check_at: string | null;
 	last_check_at: string | null;
+	// Недоставленные Оповещения: повторяются при следующих проверках.
+	pending_deliveries: AlertDelivery[];
+};
+
+export type AlertKind = 'down' | 'recovered';
+
+export type DeliveryStatus = 'pending' | 'delivered' | 'cancelled';
+
+/** Доставка оповещения: судьба одного Оповещения в одном Канале оповещения. */
+export type AlertDelivery = {
+	alert_kind: AlertKind;
+	alert_created_at: string;
+	channel_id: number;
+	channel_name: string;
+	status: DeliveryStatus;
+	attempts: number;
+	first_attempt_at: string | null;
+	last_attempt_at: string | null;
+	error: string | null;
+	telegram_error_code: number | null;
 };
 
 export type Check = {
@@ -30,6 +50,8 @@ export type Check = {
 	status_code: number | null;
 	success: boolean;
 	failure_reason: string | null;
+	// Оповещение о смене Состояния, которую вызвала эта проверка.
+	alert: { kind: AlertKind; deliveries: AlertDelivery[] } | null;
 };
 
 /** Поля Монитора, которые задаёт пользователь (тело запроса создания и правки). */
@@ -80,8 +102,13 @@ export type NotificationChannel = {
 	kind: 'telegram';
 	telegram_chat_id: number;
 	monitors_count: number;
-	last_delivery_at: string | null;
-	last_delivery_error: string | null;
+	// Последняя попытка доставить Оповещение в этот канал.
+	last_delivery: AlertDelivery | null;
+};
+
+/** Ответ на создание Канала: результат тестового сообщения не хранится. */
+export type NotificationChannelCreated = NotificationChannel & {
+	test_message_error: string | null;
 };
 
 export type TelegramConnection = { connected: boolean; bot_username: string | null };
@@ -94,6 +121,46 @@ export const STATE_LABELS: Record<MonitorState, string> = {
 	down: 'упал',
 	paused: 'на паузе'
 };
+
+export const ALERT_KIND_LABELS: Record<AlertKind, string> = {
+	down: '«упал»',
+	recovered: '«восстановился»'
+};
+
+export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
+	pending: 'не доставлено',
+	delivered: 'доставлено',
+	cancelled: 'отменено'
+};
+
+// Полные имена классов: Tailwind находит их в исходниках только целиком.
+export const DELIVERY_STATUS_COLORS: Record<DeliveryStatus, string> = {
+	pending: 'text-red-600 dark:text-red-400',
+	delivered: 'text-emerald-700 dark:text-emerald-400',
+	cancelled: 'text-zinc-500 dark:text-zinc-400'
+};
+
+/** Статус Доставки; «не доставлено» без попыток — ещё ждёт первой. */
+export function deliveryStatusLabel(delivery: AlertDelivery): string {
+	if (delivery.status === 'pending' && delivery.attempts === 0) return 'ожидает первой попытки';
+	return DELIVERY_STATUS_LABELS[delivery.status];
+}
+
+/** Причина недоставки с кодом Telegram, если он есть; null — причины нет. */
+export function deliveryError(delivery: AlertDelivery): string | null {
+	if (delivery.status === 'delivered' || !delivery.error) return null;
+	const code = delivery.telegram_error_code;
+	return code ? `${delivery.error} (код ${code})` : delivery.error;
+}
+
+/** Доставки, которые уже не удались: ещё не опробованные — не сбой. */
+export function failedDeliveries(deliveries: AlertDelivery[]): AlertDelivery[] {
+	return deliveries.filter((delivery) => delivery.attempts > 0);
+}
+
+export function attemptsLabel(attempts: number): string {
+	return plural(attempts, ['попытка', 'попытки', 'попыток']);
+}
 
 export const METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
 

@@ -13,8 +13,8 @@ from app.core.config import settings
 from app.db.session import SessionLocal, engine
 from app.monitoring.retention import run_retention
 from app.monitoring.runner import create_http_client
-from app.monitoring.scheduler import Alert, Scheduler
-from app.notifications.alerts import send_alert
+from app.monitoring.scheduler import Scheduler
+from app.notifications.alerts import deliver_pending
 from app.notifications.telegram import TelegramClient
 
 
@@ -31,8 +31,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             settings.telegram_redirect_uri,
         )
 
-        async def notify(alert: Alert) -> None:
-            await send_alert(SessionLocal, app.state.telegram, alert)
+        async def notify(monitor_id: int) -> None:
+            await deliver_pending(SessionLocal, app.state.telegram, monitor_id)
 
         tasks = [
             asyncio.create_task(Scheduler(SessionLocal, checks_http, notify).run()),

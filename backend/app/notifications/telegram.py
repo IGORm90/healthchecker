@@ -16,6 +16,11 @@ TIMEOUT_SECONDS = 10
 class TelegramError(Exception):
     """Ошибка Bot API; текст безопасен для логов и пользователя."""
 
+    def __init__(self, message: str, error_code: int | None = None) -> None:
+        super().__init__(message)
+        # error_code из ответа Bot API; None — ответа не было.
+        self.error_code = error_code
+
 
 @dataclass(frozen=True)
 class Bot:
@@ -38,7 +43,10 @@ class TelegramClient:
         except (httpx.HTTPError, ValueError) as exc:
             raise TelegramError(f"сбой связи с Telegram ({type(exc).__name__})") from None
         if not payload.get("ok"):
-            raise TelegramError(payload.get("description") or f"HTTP {response.status_code}")
+            raise TelegramError(
+                payload.get("description") or f"HTTP {response.status_code}",
+                payload.get("error_code") or response.status_code,
+            )
         return payload["result"]
 
     async def get_me(self, token: str) -> Bot:
@@ -53,8 +61,9 @@ class TelegramClient:
             allowed_updates=["message", "channel_post", "my_chat_member"],
         )
 
-    async def send_message(self, token: str, chat_id: int, text: str) -> None:
-        await self._call(
+    async def send_message(self, token: str, chat_id: int, text: str) -> int:
+        """message_id отправленного сообщения."""
+        result = await self._call(
             token,
             "sendMessage",
             chat_id=chat_id,
@@ -62,3 +71,4 @@ class TelegramClient:
             parse_mode="HTML",
             link_preview_options={"is_disabled": True},
         )
+        return result["message_id"]

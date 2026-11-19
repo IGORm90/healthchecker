@@ -7,13 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.types import utcnow
 from app.models import Monitor, MonitorState, User
-from app.monitoring.scheduler import Alert, Scheduler
+from app.monitoring.scheduler import Scheduler
 from tests.conftest import default_user_id
 
 SessionFactory = async_sessionmaker[AsyncSession]
 
 
-async def ignore(_alert: Alert) -> None:
+async def ignore(_monitor_id: int) -> None:
     pass
 
 

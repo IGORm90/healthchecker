@@ -4,6 +4,7 @@
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import MonitorStateBadge from '#lib/components/MonitorStateBadge.svelte';
 	import PauseButton from '#lib/components/PauseButton.svelte';
+	import UndeliveredAlertBadge from '#lib/components/UndeliveredAlertBadge.svelte';
 	import { formatTime } from '#lib/monitors.ts';
 	import type { PageProps } from './$types';
 
@@ -85,7 +86,12 @@
 								<span class="font-mono text-xs">{monitor.method}</span>
 								{monitor.url}
 							</td>
-							<td class="px-4 py-3"><MonitorStateBadge state={monitor.state} /></td>
+							<td class="px-4 py-3">
+								<div class="flex flex-wrap items-center gap-1.5">
+									<MonitorStateBadge state={monitor.state} />
+									<UndeliveredAlertBadge deliveries={monitor.pending_deliveries} />
+								</div>
+							</td>
 							<td class="px-4 py-3 whitespace-nowrap text-zinc-600 dark:text-zinc-400">
 								{formatTime(monitor.last_check_at)}
 							</td>

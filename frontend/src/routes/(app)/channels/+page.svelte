@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { enhance, type SubmitFunction } from '$app/forms';
 	import { resolve } from '$app/paths';
+	import DeliveryOutcome from '#lib/components/DeliveryOutcome.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import {
+		ALERT_KIND_LABELS,
 		formatTime,
 		plural,
 		type DiscoveredChat,
@@ -37,7 +39,18 @@
 		if (!form || !('channelId' in form) || form.action !== action || form.channelId !== id) {
 			return null;
 		}
-		return Object.values(form.errors).join('; ');
+		return Object.values(form.errors).join('; ') || null;
+	}
+
+	/** Тестовое сообщение в этот Канал только что дошло. */
+	function testSent(id: number): boolean {
+		return !!form && 'sent' in form && form.channelId === id;
+	}
+
+	/** Приветственное сообщение при подключении этого Канала не дошло. */
+	function welcomeError(id: number): string | null {
+		if (!form || !('welcome' in form) || form.welcome?.channelId !== id) return null;
+		return form.welcome.error;
 	}
 
 	// confirm() — в enhance: preventDefault() в onsubmit enhance не останавливает.
@@ -233,7 +246,7 @@
 					<tr>
 						<th class="px-4 py-3 font-medium">Название</th>
 						<th class="px-4 py-3 font-medium">Мониторов</th>
-						<th class="px-4 py-3 font-medium whitespace-nowrap">Последняя отправка</th>
+						<th class="px-4 py-3 font-medium whitespace-nowrap">Последняя доставка оповещения</th>
 						<th class="relative px-4 py-3"><span class="sr-only">Действия</span></th>
 					</tr>
 				</thead>
@@ -248,12 +261,25 @@
 							</td>
 							<td class="px-4 py-3">{channel.monitors_count}</td>
 							<td class="px-4 py-3">
-								<span class="whitespace-nowrap">{formatTime(channel.last_delivery_at)}</span>
-								{#if channel.last_delivery_error}
-									<p class="text-red-600 dark:text-red-400">{channel.last_delivery_error}</p>
+								{#if channel.last_delivery}
+									{@const delivery = channel.last_delivery}
+									<span class="whitespace-nowrap">{formatTime(delivery.last_attempt_at)}</span>
+									<p>
+										{ALERT_KIND_LABELS[delivery.alert_kind]}: <DeliveryOutcome {delivery} />
+									</p>
+								{:else}
+									—
 								{/if}
 								{#if channelError('test', channel.id) !== null}
 									<p class="field-error">{channelError('test', channel.id)}</p>
+								{:else if welcomeError(channel.id) !== null}
+									<p class="field-error">
+										Тестовое сообщение не дошло: {welcomeError(channel.id)}
+									</p>
+								{:else if testSent(channel.id)}
+									<p class="text-emerald-700 dark:text-emerald-400">
+										Тестовое сообщение отправлено
+									</p>
 								{/if}
 							</td>
 							<td class="px-4 py-3">

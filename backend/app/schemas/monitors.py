@@ -12,7 +12,8 @@ from pydantic import (
     model_validator,
 )
 
-from app.models import CheckInterval, HttpMethod, MonitorState
+from app.models import AlertKind, CheckInterval, HttpMethod, MonitorState
+from app.schemas.notifications import AlertDeliveryOut
 
 # Имя заголовка — token из RFC 9110.
 HeaderName = Annotated[
@@ -76,6 +77,13 @@ class MonitorOut(BaseModel):
     state_changed_at: datetime
     next_check_at: datetime | None
     last_check_at: datetime | None
+    # Недоставленные Оповещения: повторяются при следующих проверках.
+    pending_deliveries: list[AlertDeliveryOut]
+
+
+class AlertOut(BaseModel):
+    kind: AlertKind
+    deliveries: list[AlertDeliveryOut]
 
 
 class CheckOut(BaseModel):
@@ -87,3 +95,5 @@ class CheckOut(BaseModel):
     status_code: int | None
     success: bool
     failure_reason: str | None
+    # Оповещение о смене Состояния, которую вызвала эта проверка.
+    alert: AlertOut | None = None

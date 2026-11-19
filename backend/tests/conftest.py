@@ -174,6 +174,8 @@ class FakeTelegram:
         self.sent: list[tuple[int, str]] = []
         # Чаты, из которых бота удалили: отправка в них падает.
         self.kicked_from: set[int] = set()
+        # Чаты, отправка в которые не дожидается ответа Telegram.
+        self.timing_out: set[int] = set()
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         _, bot_token, method = request.url.path.split("/")
@@ -187,6 +189,8 @@ class FakeTelegram:
             case "getUpdates":
                 return self._ok([u for u in self.updates if u["update_id"] >= params["offset"]])
             case "sendMessage":
+                if params["chat_id"] in self.timing_out:
+                    raise httpx.ReadTimeout("timed out", request=request)
                 if params["chat_id"] in self.kicked_from:
                     return httpx.Response(
                         403, json={"ok": False, "description": "Forbidden: bot was kicked"}

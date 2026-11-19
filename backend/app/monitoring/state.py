@@ -1,11 +1,4 @@
-from enum import StrEnum
-
-from app.models import MonitorState
-
-
-class AlertKind(StrEnum):
-    DOWN = "down"
-    RECOVERED = "recovered"
+from app.models import AlertKind, MonitorState
 
 
 def transition(current: MonitorState, success: bool) -> tuple[MonitorState, AlertKind | None]:

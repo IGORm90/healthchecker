@@ -26,11 +26,11 @@ async def test_created_channel_gets_test_message(
     assert channel["name"] == "chat -100"
     assert channel["kind"] == "telegram"
     assert channel["monitors_count"] == 0
-    assert channel["last_delivery_at"] is not None
-    assert channel["last_delivery_error"] is None
+    assert channel["test_message_error"] is None
+    assert channel["last_delivery"] is None
 
 
-async def test_failed_test_message_is_recorded_but_channel_is_created(
+async def test_failed_test_message_is_reported_but_channel_is_created(
     client: AsyncClient, fake_telegram: FakeTelegram
 ) -> None:
     await connect(client)
@@ -38,9 +38,10 @@ async def test_failed_test_message_is_recorded_but_channel_is_created(
 
     channel = await add_channel(client, chat_id=-100)
 
-    assert channel["last_delivery_error"] == "Forbidden: bot was kicked"
+    assert channel["test_message_error"] == "Forbidden: bot was kicked"
     [listed] = (await client.get("/api/channels")).json()
-    assert listed["last_delivery_error"] == "Forbidden: bot was kicked"
+    assert listed["id"] == channel["id"]
+    assert listed["last_delivery"] is None
 
 
 async def test_channel_name_is_html_escaped_in_test_message(
@@ -121,4 +122,20 @@ async def test_test_message_on_demand(client: AsyncClient, fake_telegram: FakeTe
 
     response = await client.post(f"/api/channels/{channel['id']}/test")
 
-    assert response.json()["last_delivery_error"] == "Forbidden: bot was kicked"
+    assert response.status_code == 502
+    assert response.json()["detail"] == {
+        "code": "telegram_error",
+        "message": "Forbidden: bot was kicked",
+    }
+    [listed] = (await client.get("/api/channels")).json()
+    assert listed["last_delivery"] is None
+
+
+async def test_successful_test_message(client: AsyncClient, fake_telegram: FakeTelegram) -> None:
+    await connect(client)
+    channel = await add_channel(client, chat_id=-100)
+
+    response = await client.post(f"/api/channels/{channel['id']}/test")
+
+    assert response.status_code == 200
+    assert fake_telegram.sent[-1] == (-100, "🔔 Тестовое сообщение Healthchecker")

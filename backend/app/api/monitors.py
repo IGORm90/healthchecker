@@ -11,9 +11,11 @@ from app.auth.deps import Auth, CurrentUser
 from app.core.config import settings
 from app.db.session import get_session
 from app.db.types import utcnow
-from app.models import Check, Monitor, MonitorState, NotificationChannel
+from app.models import Alert, Check, Monitor, MonitorState, NotificationChannel
 from app.monitoring.ssrf import ForbiddenTarget, ensure_target_allowed
-from app.schemas.monitors import CheckOut, Header, MonitorIn, MonitorOut
+from app.notifications.alerts import DELIVERY_DETAILS, cancel_pending, pending_deliveries
+from app.schemas.monitors import AlertOut, CheckOut, Header, MonitorIn, MonitorOut
+from app.schemas.notifications import AlertDeliveryOut
 
 router = APIRouter(prefix="/api/monitors", tags=["monitors"])
 
@@ -30,7 +32,20 @@ _last_check_at = (
 )
 
 
-def _to_out(monitor: Monitor, last_check_at: datetime | None) -> MonitorOut:
+async def _pending_deliveries(
+    session: AsyncSession, monitor_ids: list[int]
+) -> dict[int, list[AlertDeliveryOut]]:
+    """Недоставленные Оповещения по id монитора."""
+    deliveries = await session.scalars(pending_deliveries(monitor_ids))
+    pending: dict[int, list[AlertDeliveryOut]] = {}
+    for delivery in deliveries:
+        pending.setdefault(delivery.alert.monitor_id, []).append(AlertDeliveryOut.of(delivery))
+    return pending
+
+
+def _to_out(
+    monitor: Monitor, last_check_at: datetime | None, pending: list[AlertDeliveryOut]
+) -> MonitorOut:
     return MonitorOut(
         id=monitor.id,
         user_id=monitor.user_id,
@@ -47,6 +62,7 @@ def _to_out(monitor: Monitor, last_check_at: datetime | None) -> MonitorOut:
         state_changed_at=monitor.state_changed_at,
         next_check_at=monitor.next_check_at,
         last_check_at=last_check_at,
+        pending_deliveries=pending,
     )
 
 
@@ -71,7 +87,8 @@ async def _monitor_out(session: AsyncSession, monitor: Monitor) -> MonitorOut:
     last_check_at = await session.scalar(
         select(func.max(Check.started_at)).where(Check.monitor_id == monitor.id)
     )
-    return _to_out(monitor, last_check_at)
+    pending = await _pending_deliveries(session, [monitor.id])
+    return _to_out(monitor, last_check_at, pending.get(monitor.id, []))
 
 
 async def _validated_fields(session: AsyncSession, data: MonitorIn, user_id: int) -> dict[str, Any]:
@@ -122,7 +139,12 @@ async def user_monitors(session: AsyncSession, user_id: int) -> list[MonitorOut]
         .options(selectinload(Monitor.channels))
         .order_by(Monitor.name, Monitor.id)
     )
-    return [_to_out(monitor, last_check_at) for monitor, last_check_at in rows]
+    rows = list(rows)
+    pending = await _pending_deliveries(session, [monitor.id for monitor, _ in rows])
+    return [
+        _to_out(monitor, last_check_at, pending.get(monitor.id, []))
+        for monitor, last_check_at in rows
+    ]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -137,7 +159,7 @@ async def create_monitor(data: MonitorIn, current: Auth, session: Session) -> Mo
     )
     session.add(monitor)
     await session.commit()
-    return _to_out(monitor, None)
+    return _to_out(monitor, None, [])
 
 
 @router.get("/{monitor_id}")
@@ -156,11 +178,16 @@ async def update_monitor(
 
     redefined = any(getattr(monitor, f) != fields[f] for f in CHECK_DEFINING_FIELDS)
     interval_changed = monitor.interval_seconds != fields["interval_seconds"]
+    unlinked = {c.id for c in monitor.channels} - {c.id for c in fields["channels"]}
     for name, value in fields.items():
         setattr(monitor, name, value)
 
+    if unlinked:
+        await cancel_pending(session, monitor.id, unlinked)
     if monitor.state != MonitorState.PAUSED:
         if redefined:
+            # Оповещения были о прежней цели проверки.
+            await cancel_pending(session, monitor.id)
             monitor.state = MonitorState.UNKNOWN
             monitor.state_changed_at = now
             monitor.next_check_at = now
@@ -185,6 +212,7 @@ async def delete_monitor(monitor_id: int, current: Auth, session: Session) -> No
 async def pause_monitor(monitor_id: int, current: Auth, session: Session) -> MonitorOut:
     monitor = await _get_monitor(session, monitor_id, current, owner_only=False)
     if monitor.state != MonitorState.PAUSED:
+        await cancel_pending(session, monitor.id)
         monitor.state = MonitorState.PAUSED
         monitor.state_changed_at = utcnow()
         monitor.next_check_at = None
@@ -212,10 +240,29 @@ async def list_checks(
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
 ) -> list[CheckOut]:
     await _get_monitor(session, monitor_id, current, owner_only=False)
-    checks = await session.scalars(
-        select(Check)
-        .where(Check.monitor_id == monitor_id)
-        .order_by(Check.started_at.desc(), Check.id.desc())
-        .limit(limit)
+    checks = list(
+        await session.scalars(
+            select(Check)
+            .where(Check.monitor_id == monitor_id)
+            .order_by(Check.started_at.desc(), Check.id.desc())
+            .limit(limit)
+        )
     )
-    return [CheckOut.model_validate(c) for c in checks]
+    alerts = await session.scalars(
+        select(Alert)
+        .where(Alert.check_id.in_([c.id for c in checks]))
+        .options(selectinload(Alert.deliveries).options(*DELIVERY_DETAILS))
+    )
+    alert_of_check = {
+        alert.check_id: AlertOut(
+            kind=alert.kind,
+            deliveries=[
+                AlertDeliveryOut.of(d) for d in sorted(alert.deliveries, key=lambda d: d.id)
+            ],
+        )
+        for alert in alerts
+    }
+    return [
+        CheckOut.model_validate(c).model_copy(update={"alert": alert_of_check.get(c.id)})
+        for c in checks
+    ]

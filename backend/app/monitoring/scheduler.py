@@ -1,42 +1,33 @@
 """Планировщик: раз в секунду запускает Проверки мониторов, у которых наступил next_check_at.
 
+После каждой записанной Проверки повторяет недоставленные Оповещения монитора (план 0006).
+
 Работает в единственном экземпляре в lifespan, поэтому backend запускается одним процессом.
 """
 
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import httpx
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import selectinload
 
 from app.db.types import utcnow
-from app.models import Check, Monitor, MonitorState, User
+from app.models import Alert, AlertDelivery, AlertKind, Check, Monitor, MonitorState, User
 from app.monitoring.runner import CheckResult, run_check
-from app.monitoring.state import AlertKind, transition
+from app.monitoring.state import transition
+from app.notifications.alerts import cancel_pending
 
 logger = logging.getLogger(__name__)
 
 TICK_SECONDS = 1
 MAX_PARALLEL_CHECKS = 20
 
-
-@dataclass(frozen=True)
-class Alert:
-    """Что сообщить о мониторе после смены его Состояния."""
-
-    monitor: Monitor
-    kind: AlertKind
-    # Причина неуспеха последней проверки; у восстановления — None.
-    reason: str | None
-    # Когда монитор упал: у восстановления от этого момента считается простой.
-    down_since: datetime
-
-
-Notify = Callable[[Alert], Awaitable[None]]
+# Отправляет недоставленные Оповещения монитора по его id.
+Notify = Callable[[int], Awaitable[None]]
 
 
 class Scheduler:
@@ -59,7 +50,7 @@ class Scheduler:
                 try:
                     for monitor in await self.take_due_monitors():
                         self._in_flight.add(monitor.id)
-                        group.create_task(self._check(monitor))
+                        group.create_task(self.check(monitor))
                 except Exception:
                     logger.exception("Не удалось выбрать мониторы для проверки")
                 await asyncio.sleep(TICK_SECONDS)
@@ -109,44 +100,60 @@ class Scheduler:
             )
         )
 
-    async def _check(self, snapshot: Monitor) -> None:
+    async def check(self, snapshot: Monitor) -> None:
+        """Проверяет монитор, записывает результат и повторяет недоставленные Оповещения."""
         try:
             async with self._semaphore:
                 result = await run_check(self._http, snapshot)
-            alert = await self._record(snapshot, result)
-            if alert is not None:
-                await self._notify(alert)
+            if await self._record(snapshot, result):
+                await self._notify(snapshot.id)
         except Exception:
             logger.exception("Сбой проверки монитора %s", snapshot.id)
         finally:
             self._in_flight.discard(snapshot.id)
 
-    async def _record(self, snapshot: Monitor, result: CheckResult) -> Alert | None:
+    async def _record(self, snapshot: Monitor, result: CheckResult) -> bool:
+        """Записывает проверку и Оповещение о смене Состояния; False — результат устарел."""
         async with self._session_factory() as session:
-            monitor = await session.get(Monitor, snapshot.id)
+            monitor = await session.get(
+                Monitor, snapshot.id, options=[selectinload(Monitor.channels)]
+            )
             # Пока шла проверка, монитор удалили, поставили на паузу или изменили то, что
             # проверяется: каждое из этих действий меняет state_changed_at. Результат устарел.
             if monitor is None or monitor.state_changed_at != snapshot.state_changed_at:
-                return None
+                return False
 
-            session.add(
-                Check(
-                    monitor_id=monitor.id,
-                    started_at=result.started_at,
-                    duration_ms=result.duration_ms,
-                    status_code=result.status_code,
-                    success=result.success,
-                    failure_reason=result.failure_reason,
-                )
+            check = Check(
+                monitor_id=monitor.id,
+                started_at=result.started_at,
+                duration_ms=result.duration_ms,
+                status_code=result.status_code,
+                success=result.success,
+                failure_reason=result.failure_reason,
             )
+            session.add(check)
             previous_change = monitor.state_changed_at
             new_state, alert_kind = transition(monitor.state, result.success)
             if new_state != monitor.state:
                 monitor.state = new_state
                 monitor.state_changed_at = result.started_at
-            await session.commit()
 
-        if alert_kind is None:
-            return None
-        down_since = previous_change if alert_kind is AlertKind.RECOVERED else result.started_at
-        return Alert(monitor, alert_kind, result.failure_reason, down_since)
+            if alert_kind is not None:
+                # Новое Оповещение вытесняет недоставленные прежние.
+                await cancel_pending(session, monitor.id)
+                if monitor.channels:
+                    session.add(
+                        Alert(
+                            monitor_id=monitor.id,
+                            check=check,
+                            kind=alert_kind,
+                            reason=result.failure_reason,
+                            down_since=previous_change
+                            if alert_kind is AlertKind.RECOVERED
+                            else result.started_at,
+                            created_at=result.started_at,
+                            deliveries=[AlertDelivery(channel_id=c.id) for c in monitor.channels],
+                        )
+                    )
+            await session.commit()
+        return True
