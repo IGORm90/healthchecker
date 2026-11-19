@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help install dev backend-dev frontend-dev check backend-check frontend-check \
-	test backend-test lint backend-lint frontend-lint format migrate migration up down logs
+	test backend-test lint backend-lint frontend-lint format migrate migration dev-session up down logs
 
 # Локальная база, если нет backend/.env: переменная окружения перекрыла бы значение из него.
 # Явный `make DATABASE_URL=...` действует всегда.
@@ -56,6 +56,12 @@ migrate: ## Применить миграции к локальной базе
 migration: ## Создать миграцию: make migration m="описание"
 	@test -n "$(m)" || { echo 'Укажите описание: make migration m="описание"'; exit 1; }
 	cd backend && $(BACKEND_DB) uv run alembic revision --autogenerate -m "$(m)"
+
+dev-session: ## Только локально: войти без Telegram: make dev-session id=<Telegram ID> [superadmin=1]
+	@test -n "$(id)" || { echo 'Укажите Telegram ID: make dev-session id=123 superadmin=1'; exit 1; }
+	@# migrate — в рецепте, а не зависимостью: без id подсказка должна появиться до миграций.
+	$(MAKE) migrate
+	cd backend && $(BACKEND_DB) uv run python -m app.auth.dev_session $(id) $(if $(superadmin),--superadmin)
 
 up: ## Собрать и запустить в Docker в фоне
 	docker compose up --build -d

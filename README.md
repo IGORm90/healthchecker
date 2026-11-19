@@ -85,6 +85,18 @@ make up        # docker compose up --build -d; логи — make logs, оста�
 
 Backend и frontend можно запускать по отдельности: `make backend-dev`, `make frontend-dev`. Локальная база — `backend/app.db`; другой путь задаётся через `make DATABASE_URL=... <цель>` или `backend/.env`. Frontend в режиме разработки обращается к API по `API_URL=http://localhost:8000`.
 
+### Вход на localhost без Telegram
+
+Telegram OIDC требует HTTPS, поэтому на `http://localhost` войти через Telegram нельзя. **Только для локальной разработки** Сессию можно создать из консоли:
+
+```sh
+make dev-session id=123456789 superadmin=1
+```
+
+Команда создаёт Пользователя с этим Telegram ID (или берёт существующего) и печатает строку `document.cookie = "session=..."`. Выполните её в консоли браузера на `http://localhost:5173` (`make dev`) и обновите страницу. `superadmin=1` даёт Сессии права Суперадмина без проверки `SUPERADMIN_TELEGRAM_ID`.
+
+Пользователь, созданный так, не связан с настоящим входом: войти через Telegram с тем же ID в этой базе потом не получится. Поэтому в собранном образе (`BUILD_ID` не `dev`) команда отказывается работать — на проде её не запустить.
+
 ## Миграции
 
 ```sh
